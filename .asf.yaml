@@ -23,7 +23,7 @@ github:
     - integration
     - integration-framework
     - enterprise-integration-patterns
-    - AI
+    - ai
     - yaml
     - mcp
   enabled_merge_buttons:
