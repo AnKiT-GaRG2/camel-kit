@@ -29,7 +29,7 @@ camel kit init my-integration --ai claude
 ### Development 0.4.2-SNAPSHOT from Source
 
 ```bash
-git clone https://github.com/luigidemasi/camel-kit.git
+git clone https://github.com/apache/camel-kit.git
 cd camel-kit
 ./mvnw clean install -DskipTests
 
