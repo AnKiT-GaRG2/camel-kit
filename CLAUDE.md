@@ -1,5 +1,7 @@
 # Camel-Kit
 
+@AGENTS.md
+
 AI-agent workflows for the full Apache Camel integration lifecycle. The product is
 the **skills** — Markdown instruction files that guide AI coding agents — plus a Java
 CLI that installs them into user workspaces. Repo: `camel-kit`.
