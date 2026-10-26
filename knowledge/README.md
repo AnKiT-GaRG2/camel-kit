@@ -1,0 +1,238 @@
+# Camel Kit Knowledge
+
+Knowledge layer for [camel-kit](https://github.com/luigidemasi/camel-kit) -- semantic search over Apache Camel documentation, release notes, CVE advisories, and component metadata.
+
+Release **0.0.2** bundles the Camel **4.22.1** catalog for endpoint validation.
+Development continues at **0.0.3-SNAPSHOT**. The downloadable knowledge index has its own
+`index-*` release version and can be updated independently of the server.
+
+## Modules
+
+| Module | Description |
+|--------|-------------|
+| **schema** | Shared Lucene field constants and `KnowledgeDocument` builder |
+| **embedding** | ONNX-based embedding provider (Granite Embedding Small English R2, 384-dim, Q8) |
+| **indexer** | Document ingestion pipeline -- Git repos, AsciiDoc conversion, Camel Catalog JARs |
+| **index** | Pre-built Lucene index (published as a GitHub Release asset, see Index Distribution) |
+| **mcp** | Quarkus MCP server exposing search tools to AI agents |
+
+## Prerequisites
+
+- Java 17+
+- Maven 3.9+
+
+No Docker. No Docling. No external tokens.
+
+## Data Sources
+
+| Source | Content | Format |
+|--------|---------|--------|
+| `apache/camel` | Component docs, EIP patterns, user manual | AsciiDoc |
+| `apache/camel-website` | Release notes, CVE advisories | Markdown (YAML frontmatter) |
+| `apache/camel-quarkus` | Quarkus extension docs | AsciiDoc |
+| `apache/camel-spring-boot` | Spring Boot starter docs | AsciiDoc |
+| Camel Catalog JAR | Component/EIP option metadata (properties, types, defaults) | JSON |
+
+## Dynamic Version Resolution
+
+Versions are discovered at build time -- nothing is hardcoded.
+
+1. **Active versions** -- the indexer refreshes `apache/camel-website` and parses release frontmatter (`content/releases/release-*.md`). It selects every supported LTS line (`kind: lts`, `eol > today`), plus the latest release line only when it is non-LTS. A latest LTS release therefore leaves no non-LTS line selected. Draft and future-dated releases are ignored; the highest published patch represents each selected line.
+2. **Release tags** -- latest release tags are resolved via `git ls-remote` (JGit) for `camel`, `camel-spring-boot`, and `camel-quarkus`
+3. **Quarkus-to-Camel mapping** -- resolved by fetching each Quarkus release tag's `pom.xml` from GitHub and reading the `camel.major.minor` property
+4. **Tag-aware cloning** -- repos are cloned at immutable release tags (not moving branches). `.fetched-tag` marker files enable cache reuse between builds
+
+The selected lines control component documentation, runtime documentation, and Camel Catalog metadata. Historical release notes from the oldest selected line onward remain searchable, so older non-LTS versions can still appear in `camel_docs_index_info` through their release history. CVE advisories are indexed independently of this version selection.
+
+## AsciiDoc Conversion
+
+Component documentation is converted directly from AsciiDoc to Markdown via a custom AsciidoctorJ converter (`MarkdownConverter`). No HTML intermediate, no Docling container.
+
+- Antora `partial$` includes resolved by inlining partial files with attribute substitution
+- Antora `jsonpath$` / `jsonpathcount$` extensions reimplemented in Java (`JsonPathIncludeProcessor`, pre-processing pipeline)
+- `jsonpathTable::` block macros render option tables from component JSON data
+- Component docs render with real data (e.g. "The Kafka component supports 127 options")
+
+## Camel Catalog Integration
+
+Endpoint validation uses the bundled Camel **4.22.1** catalog. The downloadable index
+is refreshed independently; updating it does not change the validator catalog.
+
+`CamelCatalogIndexer` downloads the `camel-catalog` JAR from Maven Central for each active version, extracts component and EIP JSON metadata, and creates document chunks with structured option data (properties, types, defaults, descriptions). If the exact version JAR is not on Maven Central (unreleased), it falls back to previous patch versions.
+
+## Build
+
+### Normal build (uses pre-built index)
+
+```bash
+./mvnw -B clean install
+```
+
+The MCP module downloads the ONNX embedding model from HuggingFace during `generate-resources` (skipped if already cached).
+
+### Rebuild index from source
+
+```bash
+./mvnw install -pl index -Prebuild-index -am -B
+```
+
+This will:
+1. Clone/update Git repos at latest release tags
+2. Render AsciiDoc to Markdown with resolved option tables
+3. Download Camel Catalog JARs for structured option data
+4. Parse release notes and CVE advisories
+5. Enrich release notes with Apache JIRA issue details (public, no auth required)
+6. Generate embeddings (384-dim vectors; cached in `apache-camel/embedding-cache/`, so
+   incremental rebuilds only embed new or changed chunks)
+7. Write the Lucene index to `index/src/main/resources/knowledge-index/` plus an
+   `index.json` manifest skeleton
+
+### CVE enrichment and fallback
+
+Apache Camel advisories remain the source for affected versions, fixes, severity, and descriptions.
+For optional CVSS scores/vectors and CWE classifications, the indexer reuses valid cached NVD records,
+then queries NVD. If NVD returns an HTTP error (including 429), times out, or returns an invalid or
+missing record, it falls back to [CIRCL Vulnerability-Lookup](https://circl.lu/services/cve-search/),
+using its FKIE mirror of NVD data. A mirror can lag behind NVD; only a record matching the requested
+CVE ID is accepted.
+
+No API key is required. Uncached requests are spaced at least 6.1 seconds apart across both services.
+Each request has a 15-second deadline including its response body, with a 5-second connection timeout.
+HTTP 429/503 responses put that service on cooldown according to `Retry-After` (30 seconds when absent
+or invalid); the other service is still eligible. Each lookup attempts each available service once.
+
+Successful responses are cached under `indexer/src/main/resources/apache-camel/cve-cache/`, together
+with their source, URL, and retrieval time. Existing NVD caches remain usable. If both services fail,
+the Apache advisory is still indexed without the optional enrichment; failures are not cached, so a
+later rebuild retries them. Rerun the rebuild command after updating the indexer to enrich previously
+skipped CVEs; completed index files are not changed automatically.
+
+## Index Distribution
+
+The index is **data, not code** — it is published as a GitHub Release asset, not a Maven artifact.
+Reindexing is performed on a branch; the generated index is committed with a signed commit and reviewed through a PR.
+After that PR is merged, the `Index Release` workflow (manually dispatched from `main`, cut together with version releases)
+builds the reviewed index without regenerating it, runs the retrieval-quality gate (`RetrievalQualityTest`, with working
+vectors required), verifies that the build did not modify the index, and publishes the reviewed `knowledge-index.zip` +
+`index.json` to a release tagged `index-YYYY.MM.DD-HHMMSS`.
+
+On the first knowledge query, the MCP server resolves the index in this order:
+
+1. **`knowledge.index.path`** — a local index directory, used in place (dev, tests, air-gapped)
+2. **`knowledge.index.url`** manifest (default: `https://github.com/luigidemasi/camel-kit-knowledge/releases/latest/download/index.json`)
+   — compared against the local cache in `~/.camel-kit/knowledge-index/`; a new version is
+   downloaded, sha256-verified, unzipped, and activated by atomically replacing the `current` marker.
+   If a manifest check, download, or activation fails, the server falls back to the previously active cached version.
+   Malformed or unsupported archive URLs follow the same fallback.
+   The index is opened directly from the cache — no per-startup extraction.
+3. **Classpath** — legacy fallback for uber-jars bundling the index
+
+The MCP handshake and tool listing do not initialize the index; call `camel_docs_index_info` to check readiness.
+With no usable cache, a failed first installation requires a reachable manifest or `knowledge.index.path`.
+The cache filesystem must support advisory file locks and atomic moves for both version directories and metadata.
+If acquiring the lock or an atomic move fails, a readable active cache remains usable; without one, the download attempt
+fails. A later attempt can activate an update once the failure clears; retrying alone cannot add missing advisory-lock
+or atomic-move support. Atomic moves do not guarantee durability across power loss.
+
+Cache updates are serialized across threads and processes, from reading the active version through pruning.
+Cache sharing requires all clients to use this locking protocol; older clients without it must use a separate cache.
+When another updater holds the lock, a caller uses a readable active cache immediately. Without a usable cache, lock
+acquisition waits at most five seconds in total across threads and processes before the download attempt fails.
+Each download uses its own staging directory. The next locked attempt cleans up recognized interrupted staging files,
+including legacy `<version>.part` entries only when they are real directories and the version prefix follows the
+safe-name rules below.
+New metadata files honor the process umask; replacements preserve existing POSIX permissions.
+HTTP connections have a three-second timeout. Manifest requests must finish within five seconds and archive requests
+within five minutes, including the response body; a timeout falls back to the readable active cache when available.
+The manifest ETag is saved after activation and bound to the manifest URL and version; saving it is best effort.
+An HTTP 200 response without an ETag removes the old validator, and legacy unbound validators trigger a fresh check.
+
+Custom manifest versions must be 1–128 ASCII letters, digits, dots, underscores or hyphens, beginning with a letter
+or digit. Trailing dots, `.part` suffixes, `current`, `etag`, and Windows device names are reserved (case-insensitive).
+Version directories must be real directories inside the cache, not symbolic links.
+
+Two runtime guards protect the vector leg: the index carries an embedding-model stamp
+(`__index_meta__`), and a startup self-check re-embeds a few stored chunks and verifies the
+stored vectors match — on any mismatch, vector search is disabled and search degrades to
+BM25 + reranker with a loud log line.
+
+## Running the MCP Server
+
+```bash
+# Via JBang (recommended)
+jbang io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner
+
+# Or run the local build (after ./mvnw -B clean install)
+java -jar mcp/target/camel-kit-knowledge-mcp-*-runner.jar
+```
+
+The server uses stdio by default and does not open an HTTP port. To enable the
+HTTP and SSE transports explicitly on localhost:
+
+```bash
+jbang -Dquarkus.http.host-enabled=true -Dquarkus.http.host=127.0.0.1 \
+  -Dquarkus.http.port=9090 io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner
+```
+
+To pin a specific index or run air-gapped:
+
+```properties
+# In application.properties or via -D flag
+knowledge.index.url=file:///opt/mirrors/camel-kit/index.json   # pinned/mirrored manifest
+knowledge.index.path=/opt/camel-kit/knowledge-index            # local dir, no download
+```
+
+## MCP Tools
+
+7 tools with `camel_docs_*` prefix:
+
+| Tool | Description |
+|------|-------------|
+| `camel_docs_search` | General hybrid search across all documentation |
+| `camel_docs_component_info` | Component lookup with usage, options, and related CVEs |
+| `camel_docs_cve_search` | CVE search by ID, component, severity, or version |
+| `camel_docs_release_info` | Release notes by version |
+| `camel_docs_jira_lookup` | CAMEL-* JIRA issue details and fix version |
+| `camel_docs_validate_endpoint` | Deterministic endpoint URI validation against the Camel catalog |
+| `camel_docs_index_info` | Index metadata: covered versions, doc counts, embedding model, search mode |
+
+## Search Architecture
+
+**Hybrid search** combining:
+- **BM25 text search** (20% weight) -- keyword matching via Lucene's standard analyzer
+- **Vector search** (80% weight) -- semantic similarity via KNN float vectors (384-dim Granite embeddings)
+
+Component lookups (`camel_docs_component_info`) use pure BM25 for exact matching.
+
+## Configuration Reference
+
+### System properties
+
+| Property | Purpose | Default |
+|----------|---------|---------|
+| `-Djira.parallelism` | JIRA fetch thread pool size | `4` |
+| `-Ddownload.parallelism` | Git repo download thread pool size | `4` |
+
+### MCP application properties
+
+| Property | Purpose | Default |
+|----------|---------|---------|
+| `knowledge.index.path` | Local index directory, used in place (no download) | _(unset)_ |
+| `knowledge.index.url` | Index manifest URL (https:// or file://) | latest GitHub release |
+| `knowledge.index.cache-dir` | Local cache for downloaded index versions | `~/.camel-kit/knowledge-index` |
+
+### Cache locations (gitignored)
+
+| Path | Contents |
+|------|----------|
+| `indexer/src/main/resources/apache-camel/repos/` | Cloned Git repositories |
+| `indexer/src/main/resources/apache-camel/catalog-cache/` | Downloaded Camel Catalog JARs |
+| `indexer/src/main/resources/apache-camel/embedding-cache/` | Chunk embeddings keyed by model+text (incremental rebuilds) |
+
+Apache JIRA (CAMEL-* issues) is public and requires no authentication.
+
+See [Releasing](docs/releasing.md) for the maintainer publication procedure.
+
+## License
+
+Apache License 2.0

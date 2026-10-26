@@ -1,0 +1,79 @@
+name: Index Release
+
+# Validates the reviewed knowledge index and publishes it as a GitHub Release
+# asset (knowledge-index.zip + index.json manifest). Reindexing happens on a
+# branch, and the generated index is committed with a signed commit through a
+# reviewed PR before this workflow is dispatched.
+#
+# Manual dispatch only from main: index releases are cut deliberately, together
+# with camel-kit-knowledge version releases — not on a schedule.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: index-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-index:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5.2.0
+        with:
+          java-version: 21
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build reviewed index
+        run: ./mvnw install -pl index -am -B -Dformat.skip=true
+
+      # Quality gate — the mcp tests evaluate the reviewed in-repo index
+      # (knowledge.index.path in test config points at index/src/main/resources/knowledge-index).
+      # eval.requireVectors makes a disabled vector leg (model mismatch / failed
+      # embedding self-check) a hard failure instead of graceful degradation.
+      - name: Retrieval quality gate
+        run: >
+          ./mvnw test -pl mcp -am -B -Dformat.skip=true
+          -Deval.requireVectors=true
+
+      - name: Verify reviewed index is unchanged
+        run: |
+          git diff --exit-code -- index/src/main/resources
+          test -z "$(git status --porcelain=v1 --untracked-files=all --ignored -- index/src/main/resources)"
+
+      - name: Package index and manifest
+        id: package
+        run: |
+          VERSION=$(date -u +%Y.%m.%d-%H%M%S)
+          TAG="index-$VERSION"
+          (cd index/src/main/resources && zip -9 -q -r "$GITHUB_WORKSPACE/knowledge-index.zip" knowledge-index)
+          SHA256=$(sha256sum knowledge-index.zip | cut -d' ' -f1)
+          SIZE=$(stat -c%s knowledge-index.zip)
+          jq --arg v "$VERSION" --arg sha "$SHA256" --argjson size "$SIZE" \
+             '. + {version: $v, sha256: $sha, size: $size, asset: "knowledge-index.zip"}' \
+             index/src/main/resources/index.json > index.json
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          cat index.json
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.package.outputs.tag }}" \
+            knowledge-index.zip index.json \
+            --target "$GITHUB_SHA" \
+            --latest \
+            --title "Knowledge index ${{ steps.package.outputs.version }}" \
+            --notes "$(jq -r '"Docs: \(.docCount) · Model: \(.embeddingModel) · Camel versions: \(.camelVersions | join(", ")) · Built: \(.builtAt)"' index.json)"
