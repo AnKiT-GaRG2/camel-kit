@@ -59,6 +59,8 @@ repository and do not regenerate it.
 For an individual product or the formatting gate:
 
 ```bash
+# Install the shared parent first if the full root build has not already done so
+./mvnw -B -N install
 ./mvnw -B -f kit/pom.xml clean install
 ./mvnw -B -f knowledge/pom.xml clean install
 ./mvnw -B -Psourcecheck validate

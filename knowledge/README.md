@@ -3,8 +3,10 @@
 Knowledge layer for [Camel Kit](../README.md) -- semantic search over Apache Camel documentation, release notes, CVE advisories, and component metadata.
 
 Release **0.0.2** bundles the Camel **4.22.1** catalog for endpoint validation.
-Development continues at **0.0.3-SNAPSHOT**. The downloadable knowledge index has its own
-`knowledge-index-v1-*` release version and can be updated independently of the server.
+Development continues at **0.0.3-SNAPSHOT**. Unless explicitly marked `0.0.2`, this
+README describes the current monorepo sources. Their downloadable knowledge index
+uses independent `knowledge-index-v1-*` releases; the published `0.0.2` server keeps
+its original download URL and does not support the new release-discovery or pinning options.
 
 ## Modules
 
@@ -35,7 +37,9 @@ No Docker. No Docling. No external tokens.
 
 ## Dynamic Version Resolution
 
-Versions are discovered at build time -- nothing is hardcoded.
+An explicit index rebuild discovers the documentation versions to ingest. Normal
+builds use the committed index without refreshing its content. This selection does
+not change the server's separately pinned endpoint-validation catalog.
 
 1. **Active versions** -- the indexer refreshes `apache/camel-website` and parses release frontmatter (`content/releases/release-*.md`). It selects every supported LTS line (`kind: lts`, `eol > today`), plus the latest release line only when it is non-LTS. A latest LTS release therefore leaves no non-LTS line selected. Draft and future-dated releases are ignored; the highest published patch represents each selected line.
 2. **Release tags** -- latest release tags are resolved via `git ls-remote` (JGit) for `camel`, `camel-spring-boot`, and `camel-quarkus`
@@ -71,6 +75,13 @@ is refreshed independently; updating it does not change the validator catalog.
 
 The MCP module downloads the ONNX embedding model from HuggingFace during `generate-resources` (skipped if already cached).
 
+All Knowledge modules use Maven group `org.apache.camel` and Java packages under
+`org.apache.camel.kit.knowledge`. Java consumers must update dependencies and imports
+from the previous `io.github.luigidemasi` coordinates and `io.github.luigidemasi.camelkit`
+package prefix. Knowledge and Kit inherit build conventions from the root parent,
+but retain independent versions and release schedules. The MCP server also works
+with clients that do not use Kit.
+
 ### Rebuild index from source
 
 ```bash
@@ -83,7 +94,7 @@ This will:
 3. Download Camel Catalog JARs for structured option data
 4. Parse release notes and CVE advisories
 5. Enrich release notes with Apache JIRA issue details (public, no auth required)
-6. Generate embeddings (384-dim vectors; cached in `apache-camel/embedding-cache/`, so
+6. Generate embeddings (384-dim vectors; cached in `knowledge/indexer/src/main/resources/apache-camel/embedding-cache/`, so
    incremental rebuilds only embed new or changed chunks)
 7. Write the Lucene index to `knowledge/index/src/main/resources/knowledge-index/` plus an
    `index.json` manifest skeleton
@@ -130,7 +141,8 @@ On the first knowledge query, the MCP server resolves the index in this order:
    `~/.camel-kit/knowledge-index/`. A failed update retains the previous working index;
    a pinned client may fall back only to that exact cached version. The index is opened
    directly from the cache, without per-startup extraction.
-3. **Classpath** — legacy fallback for uber-jars bundling the index
+3. **Classpath** — legacy fallback for uber-jars bundling the index, only when no
+   exact index version is pinned
 
 Discovery runs on the first knowledge query in each server process. It follows at most
 10 release-list pages (100 releases per page); configure an explicit manifest URL if
@@ -176,37 +188,74 @@ BM25 + reranker with a loud log line.
 
 ## Running the MCP Server
 
-Current source builds use `org.apache.camel:camel-kit-knowledge-mcp:0.0.3-SNAPSHOT:runner`
-and Java packages under `org.apache.camel.kit.knowledge`. The published 0.0.2 runner
-retains its original coordinates and index-discovery behavior. Kit pins that released
-runner until an explicit adoption change; building this source does not alter Kit's pin.
+### Current source build
 
+After the build above, run the server from the repository root with the committed index:
 
 ```bash
-# Via JBang (recommended)
-jbang io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner
-
-# Or run the local build (after ./mvnw -B -f knowledge/pom.xml clean install)
 java -Dknowledge.index.path=knowledge/index/src/main/resources/knowledge-index \
   -jar knowledge/mcp/target/camel-kit-knowledge-mcp-0.0.3-SNAPSHOT-runner.jar
 ```
+
+The installed runner's Maven coordinates are
+`org.apache.camel:camel-kit-knowledge-mcp:0.0.3-SNAPSHOT:runner`.
+Kit still pins the released `0.0.2` runner until explicitly configured otherwise;
+building this source does not alter that pin. See
+[using the local runner with Kit](../kit/README.md#use-the-locally-built-knowledge-server-with-kit).
 
 The server uses stdio by default and does not open an HTTP port. To enable the
 HTTP and SSE transports explicitly on localhost:
 
 ```bash
-jbang -Dquarkus.http.host-enabled=true -Dquarkus.http.host=127.0.0.1 \
-  -Dquarkus.http.port=9090 io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner
+java -Dquarkus.http.host-enabled=true -Dquarkus.http.host=127.0.0.1 \
+  -Dquarkus.http.port=9090 \
+  -Dknowledge.index.path=knowledge/index/src/main/resources/knowledge-index \
+  -jar knowledge/mcp/target/camel-kit-knowledge-mcp-0.0.3-SNAPSHOT-runner.jar
 ```
 
-To pin a specific index or run air-gapped:
+### Published release 0.0.2
+
+The existing release remains available at its original coordinates:
+
+```bash
+jbang io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner
+```
+
+It uses the standalone repository's original index download URL. The monorepo
+release-discovery and exact-version pinning behavior below requires the current source build.
+
+### Configure index selection in current source builds
+
+Choose one of these configurations in an external `config/application.properties`
+relative to the server's working directory, or pass each property as a `-Dkey=value`
+argument before `-jar`. Remove the local-path argument from the examples above when
+using discovery or a manifest: `knowledge.index.path` takes precedence over both.
+
+To select an exact monorepo release, replace this illustrative version with an
+existing published index version:
 
 ```properties
-# In application.properties or via -D flag
-knowledge.index.version=2026.10.26-120000                     # exact published version
-knowledge.index.url=file:///opt/mirrors/camel-kit/index.json   # pinned/mirrored manifest
-knowledge.index.path=/opt/camel-kit/knowledge-index            # local dir, no download
+# Exact published tag suffix; example only
+knowledge.index.version=2026.10.26-120000
 ```
+
+To bypass release discovery with a mirrored manifest (which must reference an
+accessible archive), use:
+
+```properties
+knowledge.index.url=file:///opt/mirrors/camel-kit/index.json
+```
+
+To use an unpacked local index without downloading it, use:
+
+```properties
+knowledge.index.path=/opt/camel-kit/knowledge-index
+```
+
+An explicit manifest URL may also be combined with a version pin; its manifest
+version must match the pin. A local path is used directly and bypasses release-version
+selection. Environment equivalents include `KNOWLEDGE_INDEX_PATH`,
+`KNOWLEDGE_INDEX_URL` and `KNOWLEDGE_INDEX_VERSION` in the MCP server process.
 
 ## MCP Tools
 
@@ -228,7 +277,13 @@ knowledge.index.path=/opt/camel-kit/knowledge-index            # local dir, no d
 - **BM25 text search** (20% weight) -- keyword matching via Lucene's standard analyzer
 - **Vector search** (80% weight) -- semantic similarity via KNN float vectors (384-dim Granite embeddings)
 
-Component lookups (`camel_docs_component_info`) use pure BM25 for exact matching.
+Full-text results are reranked with a local cross-encoder when its model is available.
+If embeddings are unavailable or fail the compatibility checks, retrieval falls
+back to BM25, with reranking when available; `camel_docs_index_info` reports the active mode.
+
+Component lookups (`camel_docs_component_info`) first query the exact structured
+component field. If there is no exact hit, they use full-text search and label the
+response `match: "fuzzy"`; exact hits use `match: "exact"`, and no results use `match: "none"`.
 
 ## Configuration Reference
 
@@ -245,7 +300,7 @@ Component lookups (`camel_docs_component_info`) use pure BM25 for exact matching
 |----------|---------|---------|
 | `knowledge.index.path` | Local index directory, used in place (no download) | _(unset)_ |
 | `knowledge.index.url` | Explicit manifest URL (https:// or file://); overrides discovery | unset |
-| `knowledge.index.version` | Exact index version (tag suffix); no fallback to another version | unset, newest compatible |
+| `knowledge.index.version` | Exact downloaded index version (tag suffix); no fallback to another version; local path takes precedence | unset, newest compatible |
 | `knowledge.index.releases-url` | GitHub-compatible releases API endpoint | `https://api.github.com/repos/apache/camel-kit/releases` |
 | `knowledge.index.cache-dir` | Local cache for downloaded index versions | `~/.camel-kit/knowledge-index` |
 
@@ -259,7 +314,8 @@ Component lookups (`camel_docs_component_info`) use pure BM25 for exact matching
 
 Apache JIRA (CAMEL-* issues) is public and requires no authentication.
 
-See [Releasing](docs/releasing.md) for the maintainer publication procedure.
+See the [shared release guide](../docs/releasing.md) for independent parent, product
+and maintainer-triggered index publication.
 
 ## License
 

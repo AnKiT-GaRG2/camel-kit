@@ -33,7 +33,7 @@ retains its single CLI invocation with the supplied options.
 
 ## CLI Commands
 
-This guide describes Camel Kit `0.4.1`. The standalone CLI and the `0.4.1` Camel JBang plugin provide the equivalent `camel-kit` and `camel kit` command forms. Development continues at `0.4.2-SNAPSHOT`; see [installation](../README.md#installation) for release and development channels.
+This guide describes Camel Kit `0.4.1`. The standalone CLI and the `0.4.1` Camel JBang plugin provide the equivalent `camel-kit` and `camel kit` command forms. Development continues at `0.4.2-SNAPSHOT`; see [installation](../kit/README.md#installation) for release and development channels.
 
 These commands are run in your terminal.
 

@@ -67,13 +67,15 @@ Camel JBang and its test plugin are needed for the complete execution and verifi
 
 **Technology Preview:** Camel Ship is still being stabilized. Its behavior and interfaces may change, and it is not recommended for production use. For the established staged workflow, start with `/camel-start`.
 
-The optional Ship controller requires Linux and supports Camel Main projects with YAML DSL routes. Its default backend requires Pi and Node. Bob 2, GitHub Copilot CLI and Claude Code can use their own read-only native subagents through the generated Ship skill; the controller writes their proposals and validates the result. See [Bob native Ship](../docs/ship-native.md), [Copilot native Ship](../docs/ship-copilot.md) and [Claude Code native Ship](../docs/ship-claude.md). The maintained versions are Pi `0.84.2` or `0.83.0` with Node `22.22.2`; unverified versions run only with `--accept-experimental`, while explicitly incompatible versions remain rejected. See [`camel-ship`](../docs/commands.md#camel-ship) for the complete contract.
+The optional Ship controller requires Linux and supports Camel Main projects with YAML DSL routes. Its default backend requires Pi and Node. Bob 2, GitHub Copilot CLI and Claude Code can use their own read-only native subagents through the generated Ship skill; the controller writes their proposals and validates the result. Current development builds also support Codex native Ship. See [Bob native Ship](../docs/ship-native.md), [Copilot native Ship](../docs/ship-copilot.md), [Claude Code native Ship](../docs/ship-claude.md) and [Codex native Ship](../docs/ship-codex.md). The maintained versions are Pi `0.84.2` or `0.83.0` with Node `22.22.2`; unverified versions run only with `--accept-experimental`, while explicitly incompatible versions remain rejected. See [`camel-ship`](../docs/commands.md#camel-ship) for the complete contract.
 
 `camel-kit init` checks Java, JBang, Camel JBang, and the Camel test plugin. Missing tools produce warnings but don't block initialization; Docker and Ship prerequisites are checked when those workflows run.
 
 ### Release channels
 
-This guide describes Camel Kit **0.4.1**, paired with Knowledge MCP **0.0.2**.
+This README describes the current monorepo sources. Installation and Quick Start
+examples marked **0.4.1** use that published release, paired with Knowledge MCP **0.0.2**.
+Those releases retain their original `io.github.luigidemasi` Maven coordinates and tagged catalogs.
 Ship remains a **Technology Preview** and is not recommended for production use.
 
 | Channel | Install source | Version |
@@ -146,6 +148,14 @@ jbang app install --force camel-kit@apache/camel-kit
 
 This installs the latest deployed `0.4.2-SNAPSHOT`. Build from source for a specific revision.
 
+In current source builds, `init` configures Camel and Knowledge MCP by default;
+add `--with-citrus-mcp` to include Citrus MCP. Release `0.4.1` included all three by
+default. This option controls the MCP configuration, not the Citrus test workflow.
+Claude skills now use native discovery under `.claude/skills/`; regeneration removes
+the old generated command stubs while preserving user-created commands. The agent
+layout table below describes these current sources. See the
+[changelog](../CHANGELOG.md#unreleased) for changes since `0.4.1`.
+
 ### Build from Source (development version)
 
 Build from source to use the current snapshot without waiting for the published snapshot artifact:
@@ -169,8 +179,38 @@ camel-kit --help
 ```
 
 The root build also builds the [Knowledge MCP server](../knowledge/README.md).
-To build only one product, use `./mvnw -B -f kit/pom.xml clean install` or
-`./mvnw -B -f knowledge/pom.xml clean install` from the repository root.
+For an individual product, first install the shared parent if it is not already
+available in your Maven repository, then select the product:
+
+```bash
+./mvnw -B -N install
+./mvnw -B -f kit/pom.xml clean install
+# Or: ./mvnw -B -f knowledge/pom.xml clean install
+```
+
+Kit, Knowledge and the shared parent have independent versions and release schedules.
+Current Java packages use `org.apache.camel.kit` and Maven modules use
+`org.apache.camel`. Java consumers migrating from `io.github.luigidemasi.camelkit`
+must update imports and dependencies. Shared documentation lives in root `docs/`.
+
+### Use the locally built Knowledge server with Kit
+
+Building Knowledge does not change the runner that Kit generates in MCP configuration.
+The default remains `io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner`, pinned
+in root `distribution.properties`. After installing the current Knowledge source build,
+select both its group and version explicitly with the current Kit CLI:
+
+```bash
+camel-kit init my-integration --ai claude --no-fetch \
+  -p knowledge.mcp.group-id=org.apache.camel \
+  -p knowledge.mcp.version=0.0.3-SNAPSHOT
+```
+
+This generates `org.apache.camel:camel-kit-knowledge-mcp:0.0.3-SNAPSHOT:runner` for
+that workspace. `--no-fetch` skips external catalog downloads during initialization.
+Follow [Knowledge index setup](../knowledge/README.md#index-distribution) to configure
+a local index or an explicit legacy manifest until the first compatible index release
+is published in the monorepo. Knowledge remains usable independently of Kit.
 
 ---
 
@@ -259,7 +299,7 @@ See [Antigravity setup and migration from Gemini or Bob v1](../docs/antigravity.
 
 ### Knowledge & MCP
 
-- **MCP integration** — real-time catalog queries, route validation, security analysis, documentation lookup, and Citrus test-generation metadata via MCP servers. [Learn more →](../docs/architecture.md)
+- **MCP integration** — real-time catalog queries, route validation, security analysis and documentation lookup via Camel and Knowledge MCP. Current source builds add Citrus test-generation metadata when initialized with `--with-citrus-mcp`. [Learn more →](../docs/architecture.md)
 - **Knowledge layer** — hybrid BM25 + vector search over Apache Camel documentation, component catalogs, release notes, and CVE advisories ingested from `apache/camel-website`, with best-effort NVD enrichment and a CIRCL fallback during index rebuilds. The target-specific MCP tool contract is defined in the workflow manifest. [Learn more →](../docs/architecture.md)
 - **DataMapper** — automatic data transformation with two engines: XSLT for complex schema-driven mappings, Groovy for simple field-level transformations. [Learn more →](../docs/architecture.md)
 
