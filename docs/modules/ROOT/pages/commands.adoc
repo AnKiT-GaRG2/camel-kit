@@ -43,9 +43,14 @@ camel-kit init --here [options]
 Configuration is read in three layers, the later overriding the earlier: the built-in `distribution.properties`,
 the user file given with `-c` or at its default path, and the `-p` flags. Any distribution property can be
 overridden; the common ones are `camel.main.version`, `camel.springboot.version`, `springboot.bom.version`,
-`camel.quarkus.version`, `quarkus.platform.version`, `camel.mcp.version`, `knowledge.mcp.version`,
+`camel.quarkus.version`, `quarkus.platform.version`, `camel.mcp.version`, `knowledge.mcp.group-id`, `knowledge.mcp.version`,
 `citrus.version` and `citrus.mcp.version`. The selected runtime and versions are persisted in
 `.camel-kit/config.properties`.
+
+The default Knowledge runner is the published {camel-kit-knowledge-version} artifact under
+`io.github.luigidemasi`. To use a migrated source build, override both
+`knowledge.mcp.group-id=org.apache.camel` and `knowledge.mcp.version=0.0.3-SNAPSHOT`.
+Changing the group alone would request an artifact that was never published.
 
 `init` checks Java, JBang, Camel JBang and the Camel test plugin and reports missing tools as warnings; it never
 fails on them. On terminals with a native image protocol it shows a split-screen progress view, falling back to

@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.luigidemasi</groupId>
+        <groupId>org.apache.camel</groupId>
         <artifactId>camel-kit-knowledge</artifactId>
         <version>0.0.3-SNAPSHOT</version>
     </parent>
@@ -16,12 +16,12 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.github.luigidemasi</groupId>
+            <groupId>org.apache.camel</groupId>
             <artifactId>camel-kit-knowledge-schema</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.luigidemasi</groupId>
+            <groupId>org.apache.camel</groupId>
             <artifactId>camel-kit-knowledge-embedding</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -80,7 +80,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>io.github.luigidemasi.camelkit.knowledge.indexer.IndexerMain</mainClass>
+                            <mainClass>org.apache.camel.kit.knowledge.indexer.IndexerMain</mainClass>
                         </manifest>
                     </archive>
                     <!-- Exclude source documents from the JAR — they are only needed

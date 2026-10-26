@@ -1,10 +1,10 @@
 # Camel Kit Knowledge
 
-Knowledge layer for [camel-kit](https://github.com/luigidemasi/camel-kit) -- semantic search over Apache Camel documentation, release notes, CVE advisories, and component metadata.
+Knowledge layer for [Camel Kit](../README.md) -- semantic search over Apache Camel documentation, release notes, CVE advisories, and component metadata.
 
 Release **0.0.2** bundles the Camel **4.22.1** catalog for endpoint validation.
 Development continues at **0.0.3-SNAPSHOT**. The downloadable knowledge index has its own
-`index-*` release version and can be updated independently of the server.
+`knowledge-index-v1-*` release version and can be updated independently of the server.
 
 ## Modules
 
@@ -19,7 +19,7 @@ Development continues at **0.0.3-SNAPSHOT**. The downloadable knowledge index ha
 ## Prerequisites
 
 - Java 17+
-- Maven 3.9+
+- Use the Maven wrapper at the repository root. All commands below run from that root.
 
 No Docker. No Docling. No external tokens.
 
@@ -65,7 +65,8 @@ is refreshed independently; updating it does not change the validator catalog.
 ### Normal build (uses pre-built index)
 
 ```bash
-./mvnw -B clean install
+./mvnw -B -N install
+./mvnw -B -f knowledge/pom.xml clean install
 ```
 
 The MCP module downloads the ONNX embedding model from HuggingFace during `generate-resources` (skipped if already cached).
@@ -73,7 +74,7 @@ The MCP module downloads the ONNX embedding model from HuggingFace during `gener
 ### Rebuild index from source
 
 ```bash
-./mvnw install -pl index -Prebuild-index -am -B
+./mvnw install -pl knowledge/index -Prebuild-index -am -B
 ```
 
 This will:
@@ -84,7 +85,7 @@ This will:
 5. Enrich release notes with Apache JIRA issue details (public, no auth required)
 6. Generate embeddings (384-dim vectors; cached in `apache-camel/embedding-cache/`, so
    incremental rebuilds only embed new or changed chunks)
-7. Write the Lucene index to `index/src/main/resources/knowledge-index/` plus an
+7. Write the Lucene index to `knowledge/index/src/main/resources/knowledge-index/` plus an
    `index.json` manifest skeleton
 
 ### CVE enrichment and fallback
@@ -101,7 +102,7 @@ Each request has a 15-second deadline including its response body, with a 5-seco
 HTTP 429/503 responses put that service on cooldown according to `Retry-After` (30 seconds when absent
 or invalid); the other service is still eligible. Each lookup attempts each available service once.
 
-Successful responses are cached under `indexer/src/main/resources/apache-camel/cve-cache/`, together
+Successful responses are cached under `knowledge/indexer/src/main/resources/apache-camel/cve-cache/`, together
 with their source, URL, and retrieval time. Existing NVD caches remain usable. If both services fail,
 the Apache advisory is still indexed without the optional enrichment; failures are not cached, so a
 later rebuild retries them. Rerun the rebuild command after updating the indexer to enrich previously
@@ -111,21 +112,38 @@ skipped CVEs; completed index files are not changed automatically.
 
 The index is **data, not code** — it is published as a GitHub Release asset, not a Maven artifact.
 Reindexing is performed on a branch; the generated index is committed with a signed commit and reviewed through a PR.
-After that PR is merged, the `Index Release` workflow (manually dispatched from `main`, cut together with version releases)
+After that PR is merged, the `Index Release` workflow (manually dispatched from `main` with the reviewed commit SHA, independently of server releases)
 builds the reviewed index without regenerating it, runs the retrieval-quality gate (`RetrievalQualityTest`, with working
 vectors required), verifies that the build did not modify the index, and publishes the reviewed `knowledge-index.zip` +
-`index.json` to a release tagged `index-YYYY.MM.DD-HHMMSS`.
+`index.json` to a release tagged `knowledge-index-v1-YYYY.MM.DD-HHMMSS`.
 
 On the first knowledge query, the MCP server resolves the index in this order:
 
 1. **`knowledge.index.path`** — a local index directory, used in place (dev, tests, air-gapped)
-2. **`knowledge.index.url`** manifest (default: `https://github.com/luigidemasi/camel-kit-knowledge/releases/latest/download/index.json`)
-   — compared against the local cache in `~/.camel-kit/knowledge-index/`; a new version is
-   downloaded, sha256-verified, unzipped, and activated by atomically replacing the `current` marker.
-   If a manifest check, download, or activation fails, the server falls back to the previously active cached version.
-   Malformed or unsupported archive URLs follow the same fallback.
-   The index is opened directly from the cache — no per-startup extraction.
+2. **Release discovery** — query `https://api.github.com/repos/apache/camel-kit/releases`
+   and select the newest published `knowledge-index-v1-YYYY.MM.DD-HHMMSS` release.
+   Product releases, drafts, prereleases and other format channels are ignored.
+   `knowledge.index.version=YYYY.MM.DD-HHMMSS` selects an exact index tag instead.
+   An explicit `knowledge.index.url` bypasses discovery and supports legacy or mirrored manifests.
+   The manifest must match the selected tag, v1 format, embedding model and 384 dimensions.
+   The archive is SHA-256 verified, unzipped and activated atomically in
+   `~/.camel-kit/knowledge-index/`. A failed update retains the previous working index;
+   a pinned client may fall back only to that exact cached version. The index is opened
+   directly from the cache, without per-startup extraction.
 3. **Classpath** — legacy fallback for uber-jars bundling the index
+
+Discovery runs on the first knowledge query in each server process. It follows at most
+10 release-list pages (100 releases per page); configure an explicit manifest URL if
+that bound is exceeded. Each page has the same five-second response deadline as a manifest.
+The v1 manifest contract is `formatVersion: 1`, model
+`granite-embedding-small-english-r2-q8`, and `embeddingDimensions: 384`. Legacy manifests
+may omit format and dimension fields, but must identify that model. New publishers
+include all fields. A breaking format or model change requires a new channel.
+
+The first monorepo index release must be published before default discovery is usable.
+Until then, set `knowledge.index.path` to the committed local index, or use the old
+manifest explicitly: `https://github.com/luigidemasi/camel-kit-knowledge/releases/latest/download/index.json`.
+Existing released servers continue to use their original artifact and download URLs.
 
 The MCP handshake and tool listing do not initialize the index; call `camel_docs_index_info` to check readiness.
 With no usable cache, a failed first installation requires a reachable manifest or `knowledge.index.path`.
@@ -158,12 +176,19 @@ BM25 + reranker with a loud log line.
 
 ## Running the MCP Server
 
+Current source builds use `org.apache.camel:camel-kit-knowledge-mcp:0.0.3-SNAPSHOT:runner`
+and Java packages under `org.apache.camel.kit.knowledge`. The published 0.0.2 runner
+retains its original coordinates and index-discovery behavior. Kit pins that released
+runner until an explicit adoption change; building this source does not alter Kit's pin.
+
+
 ```bash
 # Via JBang (recommended)
 jbang io.github.luigidemasi:camel-kit-knowledge-mcp:0.0.2:runner
 
-# Or run the local build (after ./mvnw -B clean install)
-java -jar mcp/target/camel-kit-knowledge-mcp-*-runner.jar
+# Or run the local build (after ./mvnw -B -f knowledge/pom.xml clean install)
+java -Dknowledge.index.path=knowledge/index/src/main/resources/knowledge-index \
+  -jar knowledge/mcp/target/camel-kit-knowledge-mcp-0.0.3-SNAPSHOT-runner.jar
 ```
 
 The server uses stdio by default and does not open an HTTP port. To enable the
@@ -178,6 +203,7 @@ To pin a specific index or run air-gapped:
 
 ```properties
 # In application.properties or via -D flag
+knowledge.index.version=2026.10.26-120000                     # exact published version
 knowledge.index.url=file:///opt/mirrors/camel-kit/index.json   # pinned/mirrored manifest
 knowledge.index.path=/opt/camel-kit/knowledge-index            # local dir, no download
 ```
@@ -218,16 +244,18 @@ Component lookups (`camel_docs_component_info`) use pure BM25 for exact matching
 | Property | Purpose | Default |
 |----------|---------|---------|
 | `knowledge.index.path` | Local index directory, used in place (no download) | _(unset)_ |
-| `knowledge.index.url` | Index manifest URL (https:// or file://) | latest GitHub release |
+| `knowledge.index.url` | Explicit manifest URL (https:// or file://); overrides discovery | unset |
+| `knowledge.index.version` | Exact index version (tag suffix); no fallback to another version | unset, newest compatible |
+| `knowledge.index.releases-url` | GitHub-compatible releases API endpoint | `https://api.github.com/repos/apache/camel-kit/releases` |
 | `knowledge.index.cache-dir` | Local cache for downloaded index versions | `~/.camel-kit/knowledge-index` |
 
 ### Cache locations (gitignored)
 
 | Path | Contents |
 |------|----------|
-| `indexer/src/main/resources/apache-camel/repos/` | Cloned Git repositories |
-| `indexer/src/main/resources/apache-camel/catalog-cache/` | Downloaded Camel Catalog JARs |
-| `indexer/src/main/resources/apache-camel/embedding-cache/` | Chunk embeddings keyed by model+text (incremental rebuilds) |
+| `knowledge/indexer/src/main/resources/apache-camel/repos/` | Cloned Git repositories |
+| `knowledge/indexer/src/main/resources/apache-camel/catalog-cache/` | Downloaded Camel Catalog JARs |
+| `knowledge/indexer/src/main/resources/apache-camel/embedding-cache/` | Chunk embeddings keyed by model+text (incremental rebuilds) |
 
 Apache JIRA (CAMEL-* issues) is public and requires no authentication.
 

@@ -1,5 +1,12 @@
 # Camel-Kit Architecture Guide
 
+The repository contains independently released `kit/` and `knowledge/` products, a shared
+parent/aggregator `pom.xml`, and root Antora documentation in `docs/`. Java packages use
+`org.apache.camel.kit`; Maven modules use `org.apache.camel`. Kit configures a pinned
+Knowledge runner over MCP; Knowledge remains usable on its own. The shared parent and
+index data also have independent versions. See [releasing](releasing.md) for the build
+and publication boundaries. The sections below describe Kit's agent workflow architecture.
+
 This document describes Camel-Kit's internal architecture for contributors and extenders. For user-facing documentation, see the [User Guide](user-guide.md) and [Command Reference](commands.md).
 
 ---
@@ -13,7 +20,7 @@ Camel-Kit combines two mechanisms to give AI agents accurate, efficient access t
 
 Together they enable AI-powered integration development targeting Apache Camel. Skills carry the process knowledge (how to design a flow, how to generate YAML, how to validate a route), while MCP provides the data knowledge (which components exist, what options they accept, whether an endpoint URI or Citrus test action is valid).
 
-The authoritative workflow contract lives in `camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. It defines command names and aliases, generated command stubs, skill visibility, pipeline stages, artifacts, transitions, MCP servers, allowed tools, and documentation references. Generator code reads this manifest for command stubs and for tool filters where the target runtime supports them; tests validate skill frontmatter against it. When changing workflow behavior, update the manifest first and then update the Markdown skill bodies and docs to match.
+The authoritative workflow contract lives in `kit/camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. It defines command names and aliases, generated command stubs, skill visibility, pipeline stages, artifacts, transitions, MCP servers, allowed tools, and documentation references. Generator code reads this manifest for command stubs and for tool filters where the target runtime supports them; tests validate skill frontmatter against it. When changing workflow behavior, update the manifest first and then update the Markdown skill bodies and docs to match.
 
 ---
 
@@ -23,9 +30,9 @@ The authoritative workflow contract lives in `camel-kit-core/src/main/resources/
 
 A skill is a directory containing a manifest file (`SKILL.md`) and an optional `guides/` subdirectory with instruction files loaded on demand. The manifest uses YAML frontmatter to declare metadata and a table listing which guides exist and when to load them.
 
-**Skill location:** `camel-kit-core/src/main/resources/skills/{skill-name}/`
+**Skill location:** `kit/camel-kit-core/src/main/resources/skills/{skill-name}/`
 
-**Workflow manifest:** `camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml` is the source of truth for skill visibility and generated slash-command stubs. The `SKILL.md` frontmatter must match the manifest.
+**Workflow manifest:** `kit/camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml` is the source of truth for skill visibility and generated slash-command stubs. The `SKILL.md` frontmatter must match the manifest.
 
 ### SKILL.md Format
 
@@ -90,7 +97,7 @@ retains the same CLI delegation contract. See [Bob setup](user-guide.md#bob-shel
 
 ### Shared Guides
 
-Shared guides live at `camel-kit-core/src/main/resources/skills/shared/` and are loaded by multiple skills:
+Shared guides live at `kit/camel-kit-core/src/main/resources/skills/shared/` and are loaded by multiple skills:
 
 | Guide | Purpose |
 |-------|---------|
@@ -408,11 +415,11 @@ The validation guide (`datamapper-validation.md`) reads the `Transformation Engi
 
 ### Template Directory
 
-`camel-kit-core/src/main/resources/templates/{agent}/`
+`kit/camel-kit-core/src/main/resources/templates/{agent}/`
 
 ### Agent Capability Registry
 
-Built-in agent metadata lives in `camel-kit-core/src/main/resources/agents/registry/{agent}.yaml`.
+Built-in agent metadata lives in `kit/camel-kit-core/src/main/resources/agents/registry/{agent}.yaml`.
 `AgentRegistry` loads these descriptors at startup and maps them into the public `AgentConfig` model used by
 commands and generators.
 
@@ -439,7 +446,7 @@ malformed YAML fail during registry loading with a descriptor-specific error.
 
 Skills, generated instruction files, MCP config templates, and active docs are runtime contract surfaces. They are tested by `ResourceConsistencyTest` in `camel-kit-core` so stale contract tokens fail the build before they ship.
 
-The active scan covers `camel-kit-core/src/main/resources/skills`, `camel-kit-core/src/main/resources/templates`, top-level Markdown files under `docs/`, `README.md`, and `CONTRIBUTING.md`. These files must reference current command names, current config files, current graph access patterns, current Knowledge MCP tool names, and current Iron Law counts.
+The active scan covers `kit/camel-kit-core/src/main/resources/skills`, `kit/camel-kit-core/src/main/resources/templates`, top-level Markdown files under `docs/`, `README.md`, `kit/README.md`, and `CONTRIBUTING.md`. These files must reference current command names, current config files, current graph access patterns, current Knowledge MCP tool names, and current Iron Law counts.
 
 Docs subdirectories are intentionally out of scope; this keeps ignored archives such as `docs/plans/` and `docs/superpowers/`, image assets, and generated planning material out of the contract check.
 
@@ -469,7 +476,7 @@ All supported targets use shared markdown skills with agent-specific traits and 
 
 Traits are agent-specific instruction fragments that are appended to generated skill files during `camel-kit init`. They bridge the gap between the equalized workflow contract and the per-agent template layer (different dispatch models).
 
-**Location:** `camel-kit-core/src/main/resources/templates/traits/{agent}/`
+**Location:** `kit/camel-kit-core/src/main/resources/templates/traits/{agent}/`
 
 **How it works:** During `camel-kit init --ai {agent}`, `TraitApplicator` applies trait files for the selected agent to the corresponding generated skill files. SKILL.md-level traits are applied for skills in the workflow manifest. Guide-level traits are discovered from the actual `.append.md` files under `traits/{agent}/{skill-name}/`, so adding a new guide trait does not require registering the guide name in Java code. Idempotent HTML comment sentinels (`<!-- TRAIT:{agent} -->` / `<!-- /TRAIT:{agent} -->`) prevent duplicate application on re-init.
 
@@ -558,7 +565,7 @@ To add support for a new AI coding assistant:
 1. Add `agents/registry/{agent-name}.yaml` with the skills path, optional command-stub contract, MCP config path and
    format, generator strategy, dispatch template, and capabilities.
 2. Create a template directory: `templates/{agent-name}/`
-3. Implement `{Agent}Generator extends DefaultGenerator` in `io.github.luigidemasi.camelkit.generator`
+3. Implement `{Agent}Generator extends DefaultGenerator` in `org.apache.camel.kit.generator`
 4. Register the generator strategy in `AgentGeneratorStrategy` and `AgentGeneratorFactory`
 5. Generate the agent's instruction file with embedded iron laws and skill references
 6. Map pipeline phases to the agent's native dispatch mechanism (modes, sub-agents, permissions, etc.)
@@ -865,7 +872,7 @@ Iron Law 2 explicitly incorporates and enforces the 8 constitution rules. They a
 
 ### Steps
 
-1. **Create directory:** `camel-kit-core/src/main/resources/skills/camel-{name}/`
+1. **Create directory:** `kit/camel-kit-core/src/main/resources/skills/camel-{name}/`
 
 2. **Write `SKILL.md`** with YAML frontmatter and guides table:
 
@@ -891,7 +898,7 @@ user_invocable: false
 
 3. **Write guide files** in `guides/`. Each guide is a self-contained markdown instruction file loaded by the agent when the skill is active.
 
-4. **Update the workflow manifest first:** add or modify the entry in `camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. Set `generated_stub: true` only for commands that should be emitted into each agent's commands directory. Add or update the corresponding skill entry, stage/artifact metadata, transitions, and MCP tool allowlists if the workflow contract changes.
+4. **Update the workflow manifest first:** add or modify the entry in `kit/camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. Set `generated_stub: true` only for commands that should be emitted into each agent's commands directory. Add or update the corresponding skill entry, stage/artifact metadata, transitions, and MCP tool allowlists if the workflow contract changes.
 
 5. **If registering generated command or skill entry points:** update agent-specific guidance only where the command needs custom behavior beyond the generated stub or project skill. The default generator creates command stubs from the manifest. Agent templates still need updates when they contain human-readable command tables, custom modes, policies, or sub-agent dispatch:
    - Claude Code: update `templates/claude/claude-md.md`

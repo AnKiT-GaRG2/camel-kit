@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Monorepo migration
+
+- Move Kit and Knowledge into sibling `kit/` and `knowledge/` directories with a shared,
+  independently versioned parent POM and root Antora documentation. Preserve original
+  Knowledge Git history and independent product releases.
+- Migrate Java packages to `org.apache.camel.kit` and Knowledge Maven coordinates to
+  `org.apache.camel`. Java consumers must update imports and dependencies.
+- Discover compatible `knowledge-index-v1-*` releases independently of product releases;
+  support exact index pins and reject incompatible updates while retaining the working cache.
+- Add target-specific Maven staging and maintainer-triggered index publication. Kit keeps its
+  released Knowledge runner pin; group and version overrides allow explicit adoption.
+
 ## [0.0.2] - 2026-09-21
 
 ### Fixed

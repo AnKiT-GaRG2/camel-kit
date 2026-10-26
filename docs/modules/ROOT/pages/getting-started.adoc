@@ -119,11 +119,11 @@ Build from source::
 ----
 git clone https://github.com/apache/camel-kit.git
 cd camel-kit
-./mvnw clean install -DskipTests
+./mvnw -B clean install
 
 # Install the development version globally via JBang
 jbang app install --name camel-kit --force \
-  camel-kit-main/src/main/jbang/main/CamelKit.java
+  kit/camel-kit-main/src/main/jbang/main/CamelKit.java
 
 # Or install the matching Camel JBang plugin from the local Maven repository
 camel plugin add kit \
@@ -133,14 +133,20 @@ camel plugin add kit \
 camel-kit --help
 ----
 
-The Knowledge MCP server (documentation search, CVE tracking, component catalog) is built from its own repository:
+The Knowledge MCP server is built from `knowledge/` in the same repository. To build it independently:
 
 [source,bash]
 ----
-git clone https://github.com/luigidemasi/camel-kit-knowledge.git
-cd camel-kit-knowledge
-./mvnw clean install -DskipTests
+./mvnw -B -f knowledge/pom.xml clean install
+java -Dknowledge.index.path=knowledge/index/src/main/resources/knowledge-index \
+  -jar knowledge/mcp/target/camel-kit-knowledge-mcp-0.0.3-SNAPSHOT-runner.jar
 ----
+
+Source-built Knowledge uses `org.apache.camel` Maven coordinates and Java packages under
+`org.apache.camel.kit.knowledge`. Kit retains its published server pin until explicitly changed.
+For a local integration check, initialize a disposable workspace with
+`-p knowledge.mcp.group-id=org.apache.camel -p knowledge.mcp.version=0.0.3-SNAPSHOT`.
+
 --
 ====
 

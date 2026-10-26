@@ -1,6 +1,14 @@
 {
   "embeddingModel": "granite-embedding-small-english-r2-q8",
   "docCount": 20367,
-  "camelVersions": ["4.18","4.19","4.20","4.21","4.22"],
-  "builtAt": "2026-09-21T13:48:24.903199133Z"
+  "camelVersions": [
+    "4.18",
+    "4.19",
+    "4.20",
+    "4.21",
+    "4.22"
+  ],
+  "builtAt": "2026-09-21T13:48:24.903199133Z",
+  "formatVersion": 1,
+  "embeddingDimensions": 384
 }

@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.luigidemasi</groupId>
+        <groupId>org.apache.camel</groupId>
         <artifactId>camel-kit-knowledge</artifactId>
         <version>0.0.3-SNAPSHOT</version>
     </parent>
@@ -14,6 +14,11 @@
     <name>Camel Kit :: Knowledge :: Index</name>
     <description>Pre-built Lucene knowledge index — independently versioned artifact</description>
 
+
+    <properties>
+        <!-- Data is published as a GitHub Release, independently of the Maven products. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
 
     <!-- No Java code — only index resources -->
     <build>
@@ -29,13 +34,13 @@
     </build>
     <profiles>
         <!-- Rebuild the knowledge index from source documents.
-             Usage: mvn install -pl index -Prebuild-index -am -->
+             Usage from repository root: ./mvnw install -pl knowledge/index -Prebuild-index -am -->
         <profile>
             <id>rebuild-index</id>
             <dependencies>
                 <!-- Indexer classes needed to run IndexerMain -->
                 <dependency>
-                    <groupId>io.github.luigidemasi</groupId>
+                    <groupId>org.apache.camel</groupId>
                     <artifactId>camel-kit-knowledge-indexer</artifactId>
                     <version>${project.parent.version}</version>
                 </dependency>
@@ -93,7 +98,7 @@
                                     <goal>java</goal>
                                 </goals>
                                 <configuration>
-                                    <mainClass>io.github.luigidemasi.camelkit.knowledge.indexer.IndexerMain</mainClass>
+                                    <mainClass>org.apache.camel.kit.knowledge.indexer.IndexerMain</mainClass>
                                     <systemProperties>
                                         <systemProperty>
                                             <key>index.output</key>

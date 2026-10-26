@@ -34,11 +34,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Test release boundaries and distribution mirrors
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
+
       - name: Check code formatting and imports
         run: ./mvnw -B -Psourcecheck validate
 
       - name: Build and certify Ship payloads
-        run: ./mvnw -B -V -Plinux-ship-certification -Dformat.skip=true clean install
+        run: ./mvnw -B -V -Plinux-ship-certification -Dformat.skip=true -Deval.requireVectors=true clean install
 
       - name: Upload build artifacts
         if: success() && matrix.java == '17'
@@ -46,8 +49,9 @@ jobs:
         with:
           name: build-artifacts-java${{ matrix.java }}-${{ github.sha }}
           path: |
-            camel-kit-main/target/*.jar
-            camel-kit-core/target/*.jar
+            kit/camel-kit-main/target/*.jar
+            kit/camel-kit-core/target/*.jar
+            knowledge/mcp/target/*-runner.jar
           retention-days: 7
 
       - name: Upload test results

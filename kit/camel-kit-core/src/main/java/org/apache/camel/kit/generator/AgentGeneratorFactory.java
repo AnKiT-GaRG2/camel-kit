@@ -1,0 +1,33 @@
+package org.apache.camel.kit.generator;
+
+import org.apache.camel.kit.config.AgentDescriptor;
+import org.apache.camel.kit.config.AgentGeneratorStrategy;
+import org.apache.camel.kit.config.AgentRegistry;
+
+public final class AgentGeneratorFactory {
+
+    private AgentGeneratorFactory() {
+    }
+
+    public static AgentGenerator create(String agentName) {
+        return switch (generatorStrategy(agentName)) {
+            case ANTIGRAVITY -> new AntigravityGenerator();
+            case BOB2 -> new Bob2Generator();
+            case CLAUDE -> new ClaudeGenerator();
+            case CODEX -> new CodexGenerator();
+            case COPILOT -> new CopilotGenerator();
+            case OPENCODE -> new OpenCodeGenerator();
+            case PI -> new PiGenerator();
+            case QWEN -> new QwenGenerator();
+            case DEFAULT -> new DefaultGenerator();
+        };
+    }
+
+    private static AgentGeneratorStrategy generatorStrategy(String agentName) {
+        AgentDescriptor descriptor = AgentRegistry.descriptor(agentName);
+        if (descriptor == null) {
+            throw new IllegalArgumentException("Unsupported agent: " + agentName);
+        }
+        return descriptor.generatorStrategyType();
+    }
+}

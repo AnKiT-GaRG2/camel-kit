@@ -1,0 +1,2 @@
+# Camel Kit JBang Plugin
+class=org.apache.camel.kit.jbang.CamelKitPlugin

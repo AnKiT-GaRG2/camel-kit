@@ -37,7 +37,7 @@ def load_properties(path):
 
 def synchronized_pom(root):
     distribution_path = root / "distribution.properties"
-    pom_path = root / "pom.xml"
+    pom_path = root / "kit" / "pom.xml"
     properties = load_properties(distribution_path)
     pom = pom_path.read_text(encoding="utf-8")
 
@@ -98,7 +98,7 @@ def synchronize(root=ROOT, write=True):
 
 def main(argv=None, root=ROOT):
     parser = argparse.ArgumentParser(
-        description="Synchronize marked root-POM properties from distribution.properties."
+        description="Synchronize marked Kit POM properties from distribution.properties."
     )
     parser.add_argument(
         "--check", action="store_true", help="report stale mirrors without changing pom.xml"

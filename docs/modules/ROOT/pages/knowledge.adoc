@@ -6,8 +6,9 @@ crawl. Knowledge MCP {camel-kit-knowledge-version} accompanies Camel Kit {camel-
 2026-09-21, holds 20,367 documents covering the supported 4.18 and 4.22 LTS lines, with release history from 4.18 to
 4.22; `camel_docs_index_info` reports the installed corpus.
 
-The server is developed in the https://github.com/luigidemasi/camel-kit-knowledge[camel-kit-knowledge] repository,
-with its own version line. `init` configures it automatically; to run it by hand:
+The server is developed in `knowledge/` in the Camel Kit repository, with its own version line.
+Source builds use the Maven group `org.apache.camel` and Java package `org.apache.camel.kit.knowledge`.
+The published {camel-kit-knowledge-version} runner retains its original coordinates. `init` configures it automatically; to run it by hand:
 
 [source,bash,subs="attributes+"]
 ----
@@ -82,27 +83,36 @@ run locally through ONNX Runtime; queries are not sent to an external model API.
 
 The index is published as `knowledge-index.zip` with an `index.json` manifest in a GitHub release of the knowledge
 repository; it is not inside the MCP Maven artifact, and normal use needs neither a clone of that repository nor the
-indexer. The server resolves the index lazily on the first query that needs it: an explicit `knowledge.index.path`
-is opened directly; otherwise the manifest at `knowledge.index.url` is fetched, compared with the local cache, and
-the archive is downloaded, checked against its SHA-256 and activated under `~/.camel-kit/knowledge-index/`; a legacy
-classpath index is the last fallback for older bundled artifacts. The
-first query can therefore take longer, and a successful MCP handshake does not mean the index is ready: call
-`camel_docs_index_info` to trigger the initialization and check the installed index.
+indexer. The server resolves the index lazily on the first knowledge query in each process.
+The published {camel-kit-knowledge-version} runner uses its original manifest location in
+`luigidemasi/camel-kit-knowledge`; it remains available for existing installations.
 
-If a manifest check, download, checksum or activation fails, or times out (three seconds to connect, five seconds for
-the manifest, five minutes for the archive), the server falls back to the active cached version when one is readable;
-a first offline query needs a populated cache or a local index path. Cache updates are serialized across threads and
-processes with file locks, activation uses atomic moves, the current and previous versions are retained, and a
-corrupted staging directory is cleaned up on the next attempt.
+Migrated source builds discover releases through
+`https://api.github.com/repos/apache/camel-kit/releases`, selecting the newest published
+`knowledge-index-v1-YYYY.MM.DD-HHMMSS` tag. Product tags, drafts, prereleases and other
+format channels are ignored. The v1 contract is Lucene 9, the model
+`granite-embedding-small-english-r2-q8`, 384 dimensions and manifest `formatVersion: 1`.
+Model/format mismatches are rejected before activation. Legacy manifests can omit format
+and dimension fields only when they identify the v1 model.
 
-[cols="1,2,1"]
-|===
-| Property | Purpose | Default
+* `knowledge.index.path` opens a local index directory directly, without network access.
+* `knowledge.index.version=YYYY.MM.DD-HHMMSS` pins an exact published index version.
+* `knowledge.index.url` overrides discovery with a specific HTTPS or file manifest, including
+  a mirror or the legacy URL
+  `https://github.com/luigidemasi/camel-kit-knowledge/releases/latest/download/index.json`.
+* `knowledge.index.releases-url` overrides the GitHub-compatible API endpoint.
 
-| `knowledge.index.path` | Use a local index directly, for development, tests or air-gapped use | unset
-| `knowledge.index.url` | Release manifest URL, `https://` or `file://` | the latest GitHub release manifest
-| `knowledge.index.cache-dir` | Downloaded versions and the active-version marker | `~/.camel-kit/knowledge-index`
-|===
+Downloaded archives are SHA-256 checked and activated atomically in
+`~/.camel-kit/knowledge-index/`. Failed checks, downloads or activations keep the previous
+working cache. A pinned client falls back only to its exact cached version. Discovery follows
+at most ten pages of 100 releases each, with a five-second deadline per page; use an explicit
+manifest if the list exceeds this bound. The first monorepo index must be published before
+its discovery endpoint is usable; until then use a local index or explicit legacy manifest.
+
+Rebuild with `./mvnw -B -pl knowledge/index -am -Prebuild-index install` from the repository
+root. Maintainers review generated data before manually dispatching `Index Release` from
+`main`; the workflow validates retrieval with working vectors before publication. Index
+publication is independent of Kit and Knowledge server releases.
 
 [[rebuild]]
 == Rebuilding the index
