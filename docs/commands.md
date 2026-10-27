@@ -33,7 +33,7 @@ retains its single CLI invocation with the supplied options.
 
 ## CLI Commands
 
-This guide describes Camel Kit `0.4.1`. The standalone CLI and the `0.4.1` Camel JBang plugin provide the equivalent `camel-kit` and `camel kit` command forms. Development continues at `0.4.2-SNAPSHOT`; see [installation](../README.md#installation) for release and development channels.
+This guide describes Camel Kit `0.4.1`. The standalone CLI and the `0.4.1` Camel JBang plugin provide the equivalent `camel-kit` and `camel kit` command forms. Development continues at `0.4.2-SNAPSHOT`; see [installation](../kit/README.md#installation) for release and development channels.
 
 These commands are run in your terminal.
 
@@ -185,6 +185,7 @@ Any property from `distribution.properties` can be overridden at layers 2 or 3. 
 | `camel.quarkus.version` | `4.18.3` | Apache Camel version for Quarkus projects |
 | `quarkus.platform.version` | `3.33.3.2` | Quarkus platform BOM version |
 | `camel.mcp.version` | See `distribution.properties` | Camel MCP server version |
+| `knowledge.mcp.group-id` | `io.github.luigidemasi` | Group of the pinned Knowledge runner; use `org.apache.camel` with migrated builds |
 | `knowledge.mcp.version` | `0.0.2` | Knowledge MCP server version |
 | `citrus.version` | `5.0.1` | Citrus test schema and dependency version |
 | `citrus.mcp.version` | `5.0.1` | Citrus MCP server artifact version |
@@ -550,7 +551,7 @@ camel-kit doc unstale docs/camel-kit/001-order-processing/implementation-plan.md
 
 These commands are used inside your AI coding assistant after project initialization. The entry point is `/camel-start`, which routes to the right pipeline skill. Skills are organized into tiers:
 
-The machine-readable source of truth for command names, generated stubs, skill visibility, pipeline stages, transitions, artifacts, and MCP tool filters is `camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. Generated command stubs and consistency tests read that manifest; update it before changing this reference text or any skill frontmatter.
+The machine-readable source of truth for command names, generated stubs, skill visibility, pipeline stages, transitions, artifacts, and MCP tool filters is `kit/camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. Generated command stubs and consistency tests read that manifest; update it before changing this reference text or any skill frontmatter.
 
 **Tier 1 — Pipeline:** `/camel-brainstorm`, `/camel-migrate`, `/camel-plan`, `/camel-execute`, `/camel-validate` — five skills implementing a four-stage pipeline, with brainstorm and migrate as alternative Design-stage entries. Invoke them via the `/camel-start` decision tree or directly via slash command.
 

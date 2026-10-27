@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
+    inputs:
+      target:
+        description: Snapshot target (all is also used by the nightly build)
+        type: choice
+        default: all
+        options: [all, parent, kit, knowledge]
 
 permissions:
   contents: read
@@ -28,15 +34,31 @@ jobs:
           server-password: MAVEN_PASSWORD
 
       - name: Deploy snapshot
-        run: ./mvnw -B -Psourcecheck,linux-ship-certification -Dformat.skip=true -DdeployAtEnd=true deploy
+        run: |
+          set -euo pipefail
+          target_args=()
+          profiles=sourcecheck
+          if [[ "$SNAPSHOT_TARGET" == all || "$SNAPSHOT_TARGET" == kit ]]; then
+            profiles+=,linux-ship-certification
+          fi
+          if [[ "$SNAPSHOT_TARGET" == all ]]; then
+            for target in parent kit knowledge; do
+              python3 tools/release_target.py "$target" --snapshot
+            done
+          else
+            arguments=$(python3 tools/release_target.py "$SNAPSHOT_TARGET" --snapshot)
+            mapfile -t target_args <<< "$arguments"
+          fi
+          ./mvnw -B "${target_args[@]}" -P"$profiles" -Deval.requireVectors=true -DdeployAtEnd=true deploy
         env:
+          SNAPSHOT_TARGET: ${{ inputs.target || 'all' }}
           MAVEN_USERNAME: ${{ secrets.MVN_CENTRAL_USER }}
           MAVEN_PASSWORD: ${{ secrets.MVN_CENTRAL_PASSWORD }}
 
   smoke-install:
     name: Verify snapshot installation
     needs: deploy
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.target == 'all' || inputs.target == 'kit')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -46,7 +68,7 @@ jobs:
 
       - name: Install snapshot in a clean JBang container
         run: |
-          snapshot_version=$(awk -F'[<>]' '/^[[:space:]]*<version>/{print $3; exit}' pom.xml)
+          snapshot_version=$(python3 tools/release_target.py kit --snapshot --version)
           [[ "$snapshot_version" == *-SNAPSHOT ]]
 
           for attempt in {1..10}; do
@@ -63,8 +85,8 @@ jobs:
                 export PATH="$JBANG_DIR/bin:/jbang/bin:$PATH"
 
                 mkdir -p "$HOME" "$JBANG_REPO"
-                jbang trust add https://github.com/luigidemasi/camel-kit/
-                jbang app install camel-kit@luigidemasi/camel-kit
+                jbang trust add https://github.com/apache/camel-kit/
+                jbang app install camel-kit@apache/camel-kit
                 test "$(camel-kit --version)" = "$SNAPSHOT_VERSION"
               '; then
               exit 0

@@ -1,0 +1,121 @@
+package org.apache.camel.kit.graph.parser;
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import org.apache.camel.kit.graph.ProjectGraph;
+import org.apache.camel.kit.graph.model.GraphNode;
+import org.apache.camel.kit.graph.model.NodeType;
+
+public class DataWeaveParser implements GraphParser {
+
+    /**
+     * Resource roots stripped from node IDs so a script's ID matches the classpath path Mule flows use to reference it
+     * ({@code classpath:dwl/x.dwl} and {@code src/main/resources/dwl/x.dwl} must yield the same node).
+     */
+    private static final List<String> RESOURCE_ROOTS = List.of(
+            "src/main/resources/", "src/test/resources/", "src/main/mule/resources/");
+
+    private static final Pattern DW_VERSION = Pattern.compile("^%dw\\s+(.+)$", Pattern.MULTILINE);
+    private static final Pattern INPUT_TYPE = Pattern.compile("^%input\\s+\\S+\\s+(.+)$", Pattern.MULTILINE);
+    private static final Pattern OUTPUT_TYPE = Pattern.compile("^%output\\s+(.+)$", Pattern.MULTILINE);
+    private static final Pattern FUNCTION = Pattern.compile("^fun\\s+(\\w+)\\s*\\(", Pattern.MULTILINE);
+    private static final Pattern FIELD_ACCESS = Pattern.compile("(?:payload|vars)(?:\\.\\w+)+");
+
+    @Override
+    public void parse(Path projectRoot, ProjectGraph graph) {
+        parseFiles(projectRoot, scannedFilePaths(projectRoot, GraphParser.projectFiles(projectRoot)), graph);
+    }
+
+    @Override
+    public List<String> scannedFiles(Path projectRoot) {
+        return GraphParser.findFiles(projectRoot, DataWeaveParser::isDataWeaveFile);
+    }
+
+    @Override
+    public List<Path> scannedFilePaths(Path projectRoot, List<Path> projectFiles) {
+        return GraphParser.findFilePaths(projectRoot, projectFiles, DataWeaveParser::isDataWeaveFile);
+    }
+
+    @Override
+    public void parseFiles(Path projectRoot, List<Path> files, ProjectGraph graph) {
+        files.forEach(file -> parseDwlFile(file, projectRoot, graph));
+    }
+
+    private void parseDwlFile(Path file, Path projectRoot, ProjectGraph graph) {
+        String content;
+        try {
+            content = Files.readString(file);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read DataWeave file: " + file, e);
+        }
+
+        String relativePath = projectRoot.relativize(file).toString().replace('\\', '/');
+        String nodeId = "dataweave:" + classpathRelativePath(relativePath);
+
+        Map<String, String> properties = new HashMap<>();
+        properties.put("file", relativePath);
+
+        extractFirst(DW_VERSION, content).ifPresent(v -> properties.put("dwVersion", v.trim()));
+        extractFirst(INPUT_TYPE, content).ifPresent(v -> properties.put("inputType", v.trim()));
+        extractFirst(OUTPUT_TYPE, content).ifPresent(v -> properties.put("outputType", v.trim()));
+
+        String functions = extractAll(FUNCTION, content).stream()
+                .collect(Collectors.joining(","));
+        if (!functions.isEmpty()) {
+            properties.put("functions", functions);
+        }
+
+        String fields = extractAllUnique(FIELD_ACCESS, content).stream()
+                .sorted()
+                .collect(Collectors.joining(","));
+        if (!fields.isEmpty()) {
+            properties.put("fields", fields);
+        }
+
+        graph.addNode(new GraphNode(nodeId, NodeType.DATAWEAVE_SCRIPT, properties));
+    }
+
+    private static boolean isDataWeaveFile(Path file) {
+        return file.toString().toLowerCase(Locale.ROOT).endsWith(".dwl");
+    }
+
+    private static String classpathRelativePath(String relativePath) {
+        for (String root : RESOURCE_ROOTS) {
+            if (relativePath.startsWith(root)) {
+                return relativePath.substring(root.length());
+            }
+        }
+        return relativePath;
+    }
+
+    private Optional<String> extractFirst(Pattern pattern, String content) {
+        Matcher matcher = pattern.matcher(content);
+        if (matcher.find()) {
+            return Optional.of(matcher.group(1));
+        }
+        return Optional.empty();
+    }
+
+    private List<String> extractAll(Pattern pattern, String content) {
+        List<String> results = new ArrayList<>();
+        Matcher matcher = pattern.matcher(content);
+        while (matcher.find()) {
+            results.add(matcher.group(1));
+        }
+        return results;
+    }
+
+    private Set<String> extractAllUnique(Pattern pattern, String content) {
+        Set<String> results = new LinkedHashSet<>();
+        Matcher matcher = pattern.matcher(content);
+        while (matcher.find()) {
+            results.add(matcher.group());
+        }
+        return results;
+    }
+}

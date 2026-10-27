@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.apache.camel</groupId>
+        <artifactId>camel-kit-knowledge</artifactId>
+        <version>0.0.3-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>camel-kit-knowledge-index</artifactId>
+    <name>Camel Kit :: Knowledge :: Index</name>
+    <description>Pre-built Lucene knowledge index — independently versioned artifact</description>
+
+
+    <properties>
+        <!-- Data is published as a GitHub Release, independently of the Maven products. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <!-- No Java code — only index resources -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+    <profiles>
+        <!-- Rebuild the knowledge index from source documents.
+             Usage from repository root: ./mvnw install -pl knowledge/index -Prebuild-index -am -->
+        <profile>
+            <id>rebuild-index</id>
+            <dependencies>
+                <!-- Indexer classes needed to run IndexerMain -->
+                <dependency>
+                    <groupId>org.apache.camel</groupId>
+                    <artifactId>camel-kit-knowledge-indexer</artifactId>
+                    <version>${project.parent.version}</version>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <!-- Download ONNX model files needed by the embedding provider during indexing -->
+                    <plugin>
+                        <groupId>com.googlecode.maven-download-plugin</groupId>
+                        <artifactId>download-maven-plugin</artifactId>
+                        <version>1.12.1</version>
+                        <executions>
+                            <execution>
+                                <id>download-onnx-model-graph</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>wget</goal>
+                                </goals>
+                                <configuration>
+                                    <url>https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/main/onnx/model_quantized.onnx</url>
+                                    <outputDirectory>${project.build.directory}/classes/models</outputDirectory>
+                                    <outputFileName>model_quantized.onnx</outputFileName>
+                                    <skipCache>false</skipCache>
+                                    <overwrite>false</overwrite>
+                                    <readTimeOut>120000</readTimeOut>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>download-onnx-model-data</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>wget</goal>
+                                </goals>
+                                <configuration>
+                                    <url>https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/main/onnx/model_quantized.onnx_data</url>
+                                    <outputDirectory>${project.build.directory}/classes/models</outputDirectory>
+                                    <outputFileName>model_quantized.onnx_data</outputFileName>
+                                    <skipCache>false</skipCache>
+                                    <overwrite>false</overwrite>
+                                    <readTimeOut>120000</readTimeOut>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <!-- Run the indexer to generate the Lucene index -->
+                            <execution>
+                                <id>build-index</id>
+                                <phase>process-classes</phase>
+                                <goals>
+                                    <goal>java</goal>
+                                </goals>
+                                <configuration>
+                                    <mainClass>org.apache.camel.kit.knowledge.indexer.IndexerMain</mainClass>
+                                    <systemProperties>
+                                        <systemProperty>
+                                            <key>index.output</key>
+                                            <value>${project.basedir}/src/main/resources/knowledge-index</value>
+                                        </systemProperty>
+                                        <systemProperty>
+                                            <key>index.resources</key>
+                                            <value>${project.basedir}/../indexer/src/main/resources</value>
+                                        </systemProperty>
+                                        <systemProperty>
+                                            <key>index.cache</key>
+                                            <value>${project.build.directory}/doc-cache</value>
+                                        </systemProperty>
+                                    </systemProperties>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

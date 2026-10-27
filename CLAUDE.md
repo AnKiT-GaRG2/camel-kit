@@ -5,17 +5,21 @@
 AI-agent workflows for the full Apache Camel integration lifecycle. The product is
 the **skills** — Markdown instruction files that guide AI coding agents — plus a Java
 CLI that installs them into user workspaces. Repo: `camel-kit`.
-Companion (separate repo, independent version line): `camel-kit-knowledge`.
+The standalone Knowledge MCP server lives in `knowledge/` with an independent version line.
+The root POM is a shared parent and aggregator; Antora lives in root `docs/`.
+Java packages use `org.apache.camel.kit`; Maven group IDs use `org.apache.camel`.
 
 ## Module map
 
 | Module | What lives here |
 |--------|----------------|
-| `camel-kit-main` | JBang entry point (`src/main/jbang/main/CamelKit.java`) |
-| `camel-kit-core` | CLI commands, config, init/trait machinery; all skills + templates resources |
-| `camel-kit-graph` | Project graph analysis — 9 parsers (Pom, Java, Groovy, XML, Mule, DataWeave, BizTalk, YAML, Config) |
-| `camel-kit-ship-resolver` | Classloader-isolated Maven Resolver for Ship evidence |
-| `camel-jbang-plugin-kit` | Camel JBang plugin |
+| `kit/camel-kit-main` | JBang entry point (`src/main/jbang/main/CamelKit.java`) |
+| `kit/camel-kit-core` | CLI commands, config, init/trait machinery; all skills + templates resources |
+| `kit/camel-kit-graph` | Project graph analysis — 9 parsers (Pom, Java, Groovy, XML, Mule, DataWeave, BizTalk, YAML, Config) |
+| `kit/camel-kit-ship-resolver` | Classloader-isolated Maven Resolver for Ship evidence |
+| `kit/camel-jbang-plugin-kit` | Camel JBang plugin |
+
+| `knowledge/` | Knowledge schema, embedding, indexer, index data and standalone MCP server |
 
 `camel-kit-dispatch/` exists on disk but is **not in the Maven reactor** — do not
 build or reference it. `camel-kit-worktrees/` and `target/` are scratch.
@@ -24,7 +28,7 @@ Records are used in this codebase (`WorkflowManifest`, `InitContext`, …) and a
 
 ## Skills authoring
 
-Location: `camel-kit-core/src/main/resources/skills/{skill-name}/`
+Location: `kit/camel-kit-core/src/main/resources/skills/{skill-name}/`
 
 Pipeline (user-invocable):
 `/camel-start` → `/camel-brainstorm` or `/camel-migrate` → `/camel-plan` →
@@ -70,5 +74,6 @@ Work is finished only when all of these hold:
 5. No hardcoded versions where `distribution.properties` should be referenced.
 6. `docs/` updated as needed; `CHANGELOG.md` for significant changes.
 7. Architectural decision documentation is updated as required.
-8. Nothing was skipped, disabled, or weakened to get green — if a check fails, report
+8. Independent releases follow `docs/releasing.md`; never deploy the whole reactor for a product release.
+9. Nothing was skipped, disabled, or weakened to get green — if a check fails, report
    the output rather than claiming done.

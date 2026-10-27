@@ -59,7 +59,7 @@ This project follows the [Apache Software Foundation Code of Conduct](https://ww
 jbang camel-kit@. --help
 
 # Or run directly from the main JBang script
-jbang camel-kit-main/src/main/jbang/main/CamelKit.java --help
+jbang kit/camel-kit-main/src/main/jbang/main/CamelKit.java --help
 
 # Run tests
 ./mvnw test
@@ -81,66 +81,26 @@ For IntelliJ IDEA or Eclipse:
 
 ## Project Structure
 
+The root [README](README.md) introduces both products. `kit/` contains the CLI,
+agent skills, graph, Ship resolver and JBang plugin. `knowledge/` contains the
+standalone MCP server, schema, embedding provider, indexer and reviewed index.
+`docs/` is the shared Antora component. The root `pom.xml` is their independently
+versioned parent and aggregator; product POMs own their versions and dependencies.
+
+Java packages use `org.apache.camel.kit`; all current Maven modules use
+`org.apache.camel`. `distribution.properties` retains Kit's exact distribution
+pins, including the selected Knowledge runner coordinates. Its Maven mirrors are
+in `kit/pom.xml`; update them with `python3 tools/sync_distribution_mirrors.py`.
+
+```bash
+./mvnw -B -N install  # install the shared parent once
+./mvnw -B -f kit/pom.xml clean install
+./mvnw -B -f knowledge/pom.xml clean install
 ```
-camel-kit/
-├── camel-kit-main/              # Main JBang CLI module
-│   └── src/main/jbang/main/
-│       └── CamelKit.java        # JBang entry point
-├── camel-kit-core/              # Core functionality module
-│   └── src/main/java/io/github/luigidemasi/camelkit/
-│       ├── CamelKitMain.java    # Picocli CLI main class
-│       ├── command/             # CLI command implementations
-│       ├── catalog/             # Catalog fetching logic
-│       ├── config/              # Configuration handling
-│       ├── output/              # Output formatting (TUI, logo)
-│       └── util/                # Utility classes
-│   └── src/main/resources/
-│       ├── distribution.properties  # Single source of truth for all config defaults
-│       ├── skills/              # Skill definitions (markdown instruction files)
-│       │   ├── camel-start/       # Meta-router and primary entry point
-│       │   ├── camel-design/      # Design-phase reference guides (internal, loaded by camel-brainstorm)
-│       │   ├── camel-brainstorm/  # Interactive design session
-│       │   ├── camel-plan/        # Implementation planning
-│       │   ├── camel-execute/     # Orchestrated execution
-│       │   ├── camel-migrate/     # Migration orchestrator
-│       │   ├── camel-verify/      # Runtime verification
-│       │   ├── camel-implement/   # YAML generation (internal)
-│       │   ├── camel-validate/    # Tier 1 user-facing static quality gate
-│       │   ├── camel-test/        # Test generation (internal)
-│       │   ├── camel-knowledge/   # Tier 2 user-facing Camel docs utility
-│       │   └── shared/            # Shared guides (iron laws, DataMapper, MCP)
-│       └── templates/           # Agent-specific instruction templates
-│           ├── bob2/            # IBM Bob 2
-│           ├── claude/          # Anthropic Claude Code
-│           ├── antigravity/     # Google Antigravity
-│           ├── qwen/            # Qwen
-│           ├── opencode/        # OpenCode
-│           └── traits/          # Agent-specific trait files (appended to skills at init)
-│               ├── claude/      # Claude Code traits
-│               ├── antigravity/ # Google Antigravity traits
-│               ├── bob2/        # IBM Bob 2 traits
-│               ├── qwen/        # Qwen traits
-│               └── opencode/    # OpenCode traits
-├── camel-jbang-plugin-kit/      # Camel JBang plugin
-├── camel-kit-graph/             # Project graph analysis (9 parsers)
-│   │   # Parsers: JavaClassParser, CamelRouteParser, MavenPomParser,
-│   │   # PropertiesParser, DockerComposeParser, OpenApiParser,
-│   │   # MuleXmlFlowParser, DataWeaveParser, BizTalkParser
-├── camel-kit-plugins/           # Plugin extensions
-├── docs/                        # Documentation
-│   ├── user-guide.md            # End-user walkthrough
-│   ├── commands.md              # Command reference
-│   ├── architecture.md          # Contributor guide
-│   └── constitution.md          # Route quality rules
-├── distribution.properties      # Root config (source of truth, copied into JAR)
-├── examples/                    # Link to the separate examples repository
-├── pom.xml                      # Parent Maven POM
-├── jbang-catalog.json           # JBang catalog definition
-├── mvnw, mvnw.cmd               # Maven Wrapper scripts
-├── README.md
-├── CONTRIBUTING.md
-└── LICENSE
-```
+
+The root command installs the shared parent. Each product command builds that
+product and all its modules, without building the other product.
+Normal builds use the committed knowledge index; rebuilding is an explicit task.
 
 ## How to Contribute
 
@@ -230,7 +190,7 @@ Before opening an issue:
 ### Code Example
 
 ```java
-package io.github.luigidemasi.camelkit.command;
+package org.apache.camel.kit.command;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -270,7 +230,7 @@ public class RouteCommand implements Runnable {
 ./mvnw test
 
 # Run tests for specific module
-./mvnw test -pl camel-kit-core
+./mvnw test -pl kit/camel-kit-core
 
 # Run with verbose output
 ./mvnw test -X
@@ -282,7 +242,7 @@ public class RouteCommand implements Runnable {
 ### Writing Tests
 
 ```java
-package io.github.luigidemasi.camelkit.catalog;
+package org.apache.camel.kit.catalog;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -346,7 +306,7 @@ Skills are markdown instruction files that guide AI agents. To add a new skill:
 
 ### 1. Create Skill Directory
 
-Create a new directory in `camel-kit-core/src/main/resources/skills/`:
+Create a new directory in `kit/camel-kit-core/src/main/resources/skills/`:
 
 ```
 skills/camel-{name}/
@@ -431,16 +391,12 @@ replace the compatibility evidence required for a release.
 
 ### Release Steps
 
-1. Update version in `pom.xml` (parent and all modules)
-2. Update `CHANGELOG.md`
-3. Update version in `jbang-catalog.json`
-4. Create release PR
-5. After merge, create GitHub release
-6. Tag with version: `v0.2.0`
+Follow [Independent Camel Kit releases](docs/releasing.md) for parent, Kit, Knowledge
+and index publication. Product releases require a released shared parent; each has
+its own version and tag. Kit adopts a Knowledge runner through an explicit tested
+pin update. Index publication is maintainer-triggered, after review and validation.
 
-### Changelog Format
 
-```markdown
 ## [0.2.0] - 2024-01-20
 
 ### Added

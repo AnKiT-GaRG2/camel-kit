@@ -1,0 +1,88 @@
+name: Index Release
+
+# Maintainers rebuild on a branch and review the generated index before publication.
+# Index data releases are independent of either Maven product.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full main commit SHA containing the reviewed index
+        required: true
+        type: string
+
+concurrency:
+  group: index-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-index:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Verify reviewed source
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5.2.0
+        with:
+          java-version: 21
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build reviewed index
+        run: ./mvnw install -pl knowledge/index -am -B -Dformat.skip=true
+
+      # Quality gate — the mcp tests evaluate the reviewed in-repo index
+      # (knowledge.index.path in test config points at knowledge/index/src/main/resources/knowledge-index).
+      # eval.requireVectors makes a disabled vector leg (model mismatch / failed
+      # embedding self-check) a hard failure instead of graceful degradation.
+      - name: Retrieval quality gate
+        run: >
+          ./mvnw test -pl knowledge/mcp -am -B -Dformat.skip=true
+          -Deval.requireVectors=true
+
+      - name: Verify reviewed index is unchanged
+        run: |
+          git diff --exit-code -- knowledge/index/src/main/resources
+          test -z "$(git status --porcelain=v1 --untracked-files=all --ignored -- knowledge/index/src/main/resources)"
+
+      - name: Package index and manifest
+        id: package
+        run: |
+          jq -e '.formatVersion == 1 and .embeddingDimensions == 384 and .embeddingModel == "granite-embedding-small-english-r2-q8"' knowledge/index/src/main/resources/index.json
+          VERSION=$(date -u +%Y.%m.%d-%H%M%S)
+          TAG="knowledge-index-v1-$VERSION"
+          (cd knowledge/index/src/main/resources && zip -9 -q -r "$GITHUB_WORKSPACE/knowledge-index.zip" knowledge-index)
+          SHA256=$(sha256sum knowledge-index.zip | cut -d' ' -f1)
+          SIZE=$(stat -c%s knowledge-index.zip)
+          jq --arg v "$VERSION" --arg sha "$SHA256" --argjson size "$SIZE" \
+             '. + {version: $v, sha256: $sha, size: $size, asset: "knowledge-index.zip"}' \
+             knowledge/index/src/main/resources/index.json > index.json
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          cat index.json
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.package.outputs.tag }}" \
+            knowledge-index.zip index.json \
+            --target "$GITHUB_SHA" \
+            --latest=false \
+            --title "Knowledge index ${{ steps.package.outputs.version }}" \
+            --notes "$(jq -r '"Docs: \(.docCount) · Model: \(.embeddingModel) · Camel versions: \(.camelVersions | join(", ")) · Built: \(.builtAt)"' index.json)"

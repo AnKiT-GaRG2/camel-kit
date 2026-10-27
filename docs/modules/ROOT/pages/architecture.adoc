@@ -6,7 +6,22 @@ how to validate a route. *MCP servers* carry the data knowledge: which component
 options they accept, whether an endpoint or a Citrus test action is valid. Around them sit a generated instruction
 file per agent and an optional code intelligence layer.
 
-The workflow contract lives in `camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. It defines the
+[[repository]]
+== Repository and release boundaries
+
+`kit/` contains the CLI, skills, graph and JBang plugin. `knowledge/` contains the standalone
+Knowledge MCP server and its schema, embedding, indexer and index modules. The root `pom.xml`
+is a shared build parent and aggregator, and `docs/` is the Antora component for both products.
+Java packages use `org.apache.camel.kit`; Maven modules use `org.apache.camel`.
+
+Kit and Knowledge keep independent versions and releases. Their runtime boundary remains MCP:
+Kit configures an exact tested server artifact, and Knowledge also serves clients that do not use
+Kit. Product dependencies belong to their own POMs. The shared parent has its own published
+version; a product release references a released parent. Index data has separate compatible
+release channels, automatic client discovery and an optional exact version pin. See
+xref:contributing.adoc#release[releasing] and xref:knowledge.adoc[] for these contracts.
+
+The workflow contract lives in `kit/camel-kit-core/src/main/resources/workflow/camel-kit-workflow.yaml`. It defines the
 command names and aliases, the generated command stubs, skill visibility, pipeline stages, artifacts, transitions, MCP
 servers and their allowed tools. The generators read it for command stubs and tool filters, and tests check the skill
 front matter against it.
@@ -28,7 +43,7 @@ front matter against it.
 | 2. Skills
 | Thirteen skills in four tiers (entry, pipeline, utilities, internal) plus the shared guides: structured prompts
   with step-by-step procedures, tool calls, conditions and guide imports, loaded progressively
-| `camel-kit-core/src/main/resources/skills/`, copied into the agent's skills directory by `init`
+| `kit/camel-kit-core/src/main/resources/skills/`, copied into the agent's skills directory by `init`
 
 | 3. MCP servers
 | Two local servers by default _(development snapshot; released versions include all three)_ (Camel catalog for verification and validation, Knowledge for documentation search),
@@ -102,7 +117,7 @@ other personas; composition is the job of skills or of the user, and the dispatc
 All targets use the same skills, Iron Laws, constitution rules, MCP tool calls and output formats. What differs is
 handled by templates and traits: the dispatch mechanism (subagents, modes or inline execution), the tool restriction
 model, the file reading patterns, the parallelization strategy and the configuration format. `init` reads the agent's
-descriptor from the capability registry (`camel-kit-core/src/main/resources/agents/registry/`), copies the skills,
+descriptor from the capability registry (`kit/camel-kit-core/src/main/resources/agents/registry/`), copies the skills,
 renders the dispatch block and the MCP configuration, and appends the agent's traits: instruction fragments under
 `templates/traits/<agent>/` that `TraitApplicator` adds to the generated skill files between idempotent comment
 sentinels, so re-running `init` never duplicates them. Each persona is installed as a complete role file in the

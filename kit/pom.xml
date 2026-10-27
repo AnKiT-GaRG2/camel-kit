@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.apache.camel</groupId>
+        <artifactId>camel-kit-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <groupId>org.apache.camel</groupId>
+    <artifactId>camel-kit</artifactId>
+    <version>0.4.2-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Camel Kit</name>
+    <description>Design Apache Camel Integrations with AI</description>
+    <properties>
+        <picocli.version>4.7.7</picocli.version>
+        <ascii-table.version>1.9.0</ascii-table.version>
+        <jackson.version>${ship.evidence.jackson-yaml.version}</jackson.version>
+        <jline.version>3.30.6</jline.version>
+        <tamboui.version>0.1.0</tamboui.version>
+        <tomlj.version>1.1.1</tomlj.version>
+        <quarkus.version>3.20.2.2</quarkus.version>
+        <quarkus-mcp.version>1.6.1</quarkus-mcp.version>
+        <camel.version>${camel.main.version}</camel.version>
+        <!-- BEGIN distribution property mirrors
+             distribution.properties is the packaged runtime source of truth.
+             These literals must also exist here because Maven builds its model
+             and resolves dependency/plugin versions before a lifecycle plugin
+             can read that file. Run tools/sync_distribution_mirrors.py after
+             changing the source; DistributionVersionMirrorTest prevents drift. -->
+        <camel.main.version>4.22.1</camel.main.version>
+        <ship.evidence.jackson-yaml.version>2.19.2</ship.evidence.jackson-yaml.version>
+        <maven.resolver.version>1.9.27</maven.resolver.version>
+        <maven.provider.version>3.9.12</maven.provider.version>
+        <maven.jar.plugin.version>3.5.0</maven.jar.plugin.version>
+        <maven.shade.plugin.version>3.6.1</maven.shade.plugin.version>
+        <maven.surefire.plugin.version>3.5.4</maven.surefire.plugin.version>
+        <maven.failsafe.plugin.version>3.5.4</maven.failsafe.plugin.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        <json.schema.validator.version>2.0.4</json.schema.validator.version>
+        <!-- END distribution property mirrors -->
+        <!-- Code quality -->
+    </properties>
+    <scm>
+        <tag>HEAD</tag>
+    </scm>
+
+    <modules>
+        <module>camel-kit-main</module>
+        <module>camel-kit-core</module>
+        <module>camel-kit-graph</module>
+        <module>camel-kit-ship-resolver</module>
+        <module>camel-jbang-plugin-kit</module>
+    </modules>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>${picocli.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.freva</groupId>
+                <artifactId>ascii-table</artifactId>
+                <version>${ascii-table.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-yaml</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json.schema.validator.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jline</groupId>
+                <artifactId>jline</artifactId>
+                <version>${jline.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-image</artifactId>
+                <version>${tamboui.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-core</artifactId>
+                <version>${tamboui.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-tui</artifactId>
+                <version>${tamboui.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-widgets</artifactId>
+                <version>${tamboui.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-jline3-backend</artifactId>
+                <version>${tamboui.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.quarkus.qute</groupId>
+                <artifactId>qute-core</artifactId>
+                <version>${quarkus.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.tomlj</groupId>
+                <artifactId>tomlj</artifactId>
+                <version>${tomlj.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>de.thetaphi</groupId>
+                    <artifactId>forbiddenapis</artifactId>
+                    <version>${forbiddenapis.version}</version>
+                    <configuration>
+                        <bundledSignatures>
+                            <bundledSignature>jdk-deprecated</bundledSignature>
+                            <bundledSignature>jdk-unsafe</bundledSignature>
+                            <bundledSignature>jdk-internal</bundledSignature>
+                            <bundledSignature>jdk-non-portable</bundledSignature>
+                            <bundledSignature>jdk-reflection</bundledSignature>
+                        </bundledSignatures>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>check</id>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>testCheck</id>
+                            <goals>
+                                <goal>testCheck</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <version>1.2.1</version>
+                <executions>
+                    <execution>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>read-project-properties</goal>
+                        </goals>
+                        <configuration>
+                            <files>
+                                <file>${maven.multiModuleProjectDirectory}/distribution.properties</file>
+                            </files>
+                            <quiet>true</quiet>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <inherited>false</inherited>
+                <executions>
+                    <execution>
+                        <id>sync-jbang-launcher-versions</id>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <replaceregexp file="${maven.multiModuleProjectDirectory}/kit/camel-kit-main/src/main/jbang/main/CamelKit.java" match="(camel[.]kit[.]version:)[^}]+" replace="\1${project.version}" byline="true" encoding="UTF-8"/>
+                                <replaceregexp file="${maven.multiModuleProjectDirectory}/kit/camel-kit-main/dist/CamelKit.java" match="(camel[.]kit[.]version:)[^}]+" replace="\1${project.version}" byline="true" encoding="UTF-8"/>
+                                <chmod file="${maven.multiModuleProjectDirectory}/kit/camel-kit-main/dist/CamelKit.java" perm="u+x"/>
+                                <fail message="JBang launcher fallbacks do not match Maven project version ${project.version}">
+                                    <condition>
+                                        <not>
+                                            <and>
+                                                <resourcecontains resource="${maven.multiModuleProjectDirectory}/kit/camel-kit-main/src/main/jbang/main/CamelKit.java" substring="camel.kit.version:${project.version}}"/>
+                                                <resourcecontains resource="${maven.multiModuleProjectDirectory}/kit/camel-kit-main/dist/CamelKit.java" substring="camel.kit.version:${project.version}}"/>
+                                            </and>
+                                        </not>
+                                    </condition>
+                                </fail>
+                            </target>
+                        </configuration>
+                    </execution>
+                    <!-- Maven Release commits its POM file set plus files already staged in Git. -->
+                    <execution>
+                        <id>stage-jbang-launcher-versions</id>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <exec executable="git" dir="${maven.multiModuleProjectDirectory}" failonerror="true">
+                                    <arg value="add"/>
+                                    <arg value="-f"/>
+                                    <arg value="--"/>
+                                    <arg value="kit/camel-kit-main/src/main/jbang/main/CamelKit.java"/>
+                                    <arg value="kit/camel-kit-main/dist/CamelKit.java"/>
+                                </exec>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <useReleaseProfile>false</useReleaseProfile>
+                    <releaseProfiles>release</releaseProfiles>
+                    <preparationGoals>antrun:run@sync-jbang-launcher-versions clean verify antrun:run@stage-jbang-launcher-versions</preparationGoals>
+                    <completionGoals>-N antrun:run@sync-jbang-launcher-versions antrun:run@stage-jbang-launcher-versions</completionGoals>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>de.thetaphi</groupId>
+                <artifactId>forbiddenapis</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,9 +1,10 @@
 = Contributing and releasing
 
 Camel Kit is developed at https://github.com/apache/camel-kit[apache/camel-kit] under the Apache Camel project.
-Workflow examples and migration samples live in
-https://github.com/luigidemasi/camel-kit-examples[camel-kit-examples], and the Knowledge MCP server in
-https://github.com/luigidemasi/camel-kit-knowledge[camel-kit-knowledge], each with its own version line. Issues
+The CLI and agent skills live in `kit/`; the standalone Knowledge MCP server lives in `knowledge/`.
+Both share this repository and documentation, with independent versions and releases.
+Workflow examples and migration samples remain in
+https://github.com/luigidemasi/camel-kit-examples[camel-kit-examples]. Issues
 and pull requests go to the repository that owns the change; questions go to the Camel
 link:/community/mailing-list/[mailing lists]. Contributors follow the
 https://www.apache.org/foundation/policies/conduct.html[ASF code of conduct].
@@ -19,27 +20,32 @@ repository root.
 ./mvnw clean install                                      # all modules
 ./mvnw -B -Plinux-ship-certification clean install       # what CI runs (Linux)
 ./mvnw -B -Psourcecheck validate                          # the formatting gate
-./mvnw test -pl camel-kit-core                            # one module
-./mvnw test -pl camel-kit-core -Dtest=ShippedAssetStructureTest   # one test class
+./mvnw test -pl kit/camel-kit-core                            # one module
+./mvnw test -pl kit/camel-kit-core -Dtest=ShippedAssetStructureTest   # one test class
 
 # run the CLI from source
-jbang camel-kit-main/src/main/jbang/main/CamelKit.java --help
+jbang kit/camel-kit-main/src/main/jbang/main/CamelKit.java --help
 ----
 
 [cols="1,3"]
 |===
 | Module | Content
 
-| `camel-kit-main` | The JBang entry point
-| `camel-kit-core` | CLI commands, configuration, initialization and traits; all skills and templates as resources
-| `camel-kit-graph` | The project graph: nine parsers and two post-processors
-| `camel-kit-ship-resolver` | The classloader-isolated Maven resolver used for Ship evidence
-| `camel-jbang-plugin-kit` | The Camel JBang plugin
+| `kit/camel-kit-main` | The JBang entry point
+| `kit/camel-kit-core` | CLI commands, configuration, initialization and traits; all skills and templates as resources
+| `kit/camel-kit-graph` | The project graph: nine parsers and two post-processors
+| `kit/camel-kit-ship-resolver` | The classloader-isolated Maven resolver used for Ship evidence
+| `kit/camel-jbang-plugin-kit` | The Camel JBang plugin
 |===
+
+Install the shared parent once with `./mvnw -B -N install`, then build one product with `./mvnw -B -f kit/pom.xml clean install`
+or `./mvnw -B -f knowledge/pom.xml clean install`. The Knowledge reactor contains `schema`,
+`embedding`, `indexer`, `index` and `mcp`; ordinary builds use the committed index.
+All Java packages use `org.apache.camel.kit`, and Maven modules use `org.apache.camel`.
 
 `distribution.properties` at the repository root is the single source of truth for every version pin; it is
 copied into the JAR and never duplicated by hand. `tools/sync_distribution_mirrors.py` copies the few literals
-Maven needs into the root POM and checks them with `--check`.
+Maven needs into `kit/pom.xml` and checks them with `--check`.
 
 [[done]]
 == Definition of done
@@ -64,7 +70,7 @@ plain and descriptive.
 [[skills]]
 == Adding a skill
 
-A skill is a directory under `camel-kit-core/src/main/resources/skills/` with a `SKILL.md` manifest (YAML front
+A skill is a directory under `kit/camel-kit-core/src/main/resources/skills/` with a `SKILL.md` manifest (YAML front
 matter with `name`, `description` and `user_invocable`, then the steps and a guide table) and a `guides/` directory
 of instruction files loaded on demand. Every skill is registered in the workflow manifest
 `camel-kit-workflow.yaml`, which drives the generated command stubs, the trait application and the structural tests:
@@ -85,30 +91,32 @@ tests read, and `docs/user-guide.md`; keep them in step with these pages when be
 [[release]]
 == Releasing
 
-Camel Kit follows semantic versioning. A release tag carries fixed POM versions and `main` carries the next
-snapshot: release {camel-kit-version} is followed by {camel-kit-snapshot-version}.
+The shared parent, Kit and Knowledge have independent versions and release schedules.
+A product release references a published, released shared parent. Use the corresponding
+POM (`pom.xml` with `-N`, `kit/pom.xml`, or `knowledge/pom.xml`) when preparing or staging a
+release; never deploy the root reactor to release one product.
 
-IMPORTANT: Release {camel-kit-version} was published before the donation, with the direct publication workflow that
-the repository still carries in `docs/releasing.md` and `.github/workflows/release.yml`. As an Apache Camel
-subproject, Camel Kit releases follow the https://www.apache.org/legal/release-policy.html[ASF release policy]: a
-release candidate is staged and verified, and the PMC votes on it, with at least three binding +1 votes, before
-anything is published. The Camel xref:manual::release-guide.adoc[release guide] describes that sequence. The
-workflow below deploys straight to Maven Central without staging or a vote, so it is not the Apache procedure; the
-automation and this page are updated when the first Apache release is prepared.
+Tags are `camel-kit-parent-X.Y.Z`, `camel-kit-X.Y.Z` and `camel-kit-knowledge-X.Y.Z`.
+`tools/release_target.py` validates the selected target, its module versions and its tag.
+The manually dispatched `Stage Maven Release` workflow checks the exact tag and reviewed
+commit SHA, tests and signs that target, and uploads a validated staging deployment.
+Automatic promotion is disabled.
 
-The preparation steps from `docs/releasing.md` remain the mechanics of cutting a version:
+Apache releases follow the https://www.apache.org/legal/release-policy.html[ASF release policy]
+and the Camel xref:manual::release-guide.adoc[release guide], including a source release
+candidate and successful PMC vote before publication. The staging workflow does not automate
+that whole process. See `docs/releasing.md` in the repository for the preparation steps.
 
-. From reviewed `main`, on a release branch, update the README, the changelog and the documentation; keep Ship
-  labelled Technology Preview.
-. Set the reactor version and the root SCM tag, pin `knowledge.mcp.version` in `distribution.properties` to the
-  published Knowledge release, and synchronize the JBang launcher fallbacks with
-  `./mvnw -B -N antrun:run@sync-jbang-launcher-versions`.
-. Run the full release build with artifact signing:
-  `./mvnw -B -Prelease,sourcecheck,linux-ship-certification clean install`.
-. Review the diff, commit with a signed commit, tag that exact commit and record its SHA.
-. Advance every POM to the next snapshot, restore the SCM tag, synchronize the launchers again, validate the
-  development build, sign the commit and open the pull request.
+Kit pins a tested Knowledge runner using `knowledge.mcp.group-id` and `knowledge.mcp.version`
+in `distribution.properties`. Published Knowledge {camel-kit-knowledge-version} retains its
+`io.github.luigidemasi` coordinates; migrated development builds use `org.apache.camel`.
+Adopting a new runner is explicit and does not require matching Kit and Knowledge versions.
+Synchronize Kit launchers from its POM with
+`./mvnw -B -f kit/pom.xml -N antrun:run@sync-jbang-launcher-versions`.
 
-The Knowledge MCP server and its refreshed index are released first, and the pinned runner artifact is verified
-before Camel Kit is built. After a release, the tag-pinned JBang install and the Camel JBang plugin are verified from
-a clean cache, and the unqualified JBang alias keeps following the development branch.
+Index data is published independently under `knowledge-index-v1-YYYY.MM.DD-HHMMSS` tags.
+Maintainers rebuild it on a branch with
+`./mvnw -B -pl knowledge/index -am -Prebuild-index install`, review the generated data, and
+manually dispatch `Index Release` from `main` with the reviewed SHA. The workflow requires
+working vector retrieval and packages the reviewed index without regenerating it.
+See xref:knowledge.adoc[] for compatible discovery, explicit version pins and cache fallback.

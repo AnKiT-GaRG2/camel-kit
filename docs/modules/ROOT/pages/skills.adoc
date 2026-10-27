@@ -2,7 +2,7 @@
 
 A skill is a directory with a manifest, `SKILL.md`, and an optional `guides/` directory of instruction files loaded on
 demand. Skills are not code: they are structured prompts with step-by-step procedures, catalog tool calls, conditions
-and shared guide imports. They live in `camel-kit-core/src/main/resources/skills/` and `init` copies them, adapted to
+and shared guide imports. They live in `kit/camel-kit-core/src/main/resources/skills/` and `init` copies them, adapted to
 the agent, into the project.
 
 [[tiers]]

@@ -7,7 +7,7 @@ replacement targets and regenerate project assets as described below.
 ## Set up Antigravity
 
 Install Antigravity using [Google's getting-started guide](https://antigravity.google/docs/getting-started).
-Install Camel Kit `0.4.1` as described in the [installation instructions](../README.md#installation), then run:
+Install Camel Kit `0.4.1` as described in the [installation instructions](../kit/README.md#installation), then run:
 
 ```bash
 camel-kit init my-integration --ai antigravity

@@ -1,48 +1,93 @@
-# Releasing Camel Kit
+# Independent Camel Kit releases
 
-Release `0.4.1` is followed by development version `0.4.2-SNAPSHOT`.
-Release tags contain fixed POM versions; `main` contains the next snapshot version.
+The repository contains three Maven release targets and a separate index-data release.
+Run all commands below from the repository root with `./mvnw`.
 
-## Prepare
+| Target | POM | Tag | Scope |
+|---|---|---|---|
+| Shared parent | `pom.xml` | `camel-kit-parent-X.Y.Z` | Parent POM only (`-N`) |
+| Kit | `kit/pom.xml` | `camel-kit-X.Y.Z` | Kit and its five modules |
+| Knowledge | `knowledge/pom.xml` | `camel-kit-knowledge-X.Y.Z` | Knowledge code; excludes index data |
+| Index | `knowledge/index/src/main/resources/` | `knowledge-index-v1-YYYY.MM.DD-HHMMSS` | Validated ZIP and manifest |
 
-1. Start from reviewed `main` in a clean release branch. Update README, changelog,
-   documentation and the companion website. Keep Ship labeled Technology Preview.
-2. Set the reactor version to `0.4.1` and the root SCM tag to `camel-kit-0.4.1`.
-   Pin `knowledge.mcp.version` in `distribution.properties` to the published Knowledge release.
-   Synchronize both JBang launcher fallbacks using the existing release goal:
+Versions and release schedules are independent. A product release must reference an
+already published, released `org.apache.camel:camel-kit-parent` version. A parent
+release does not change either product version. A Knowledge release does not update
+Kit's server pin automatically.
 
-   ```bash
-   ./mvnw -B -N antrun:run@sync-jbang-launcher-versions
-   ```
-3. Run the full release build with artifact signing (a local GPG key is required):
+## Prepare a Maven release
 
-   ```bash
-   ./mvnw -B -Prelease,sourcecheck,linux-ship-certification clean install
-   ```
+1. Start from reviewed source on a release branch. Change only the selected product
+   POM version and its child parent versions (or only the root version for a parent
+   release). Set its SCM tag. Keep the other product's version unchanged.
+2. For a product release, set its shared parent to the intended released version.
+   Confirm that this parent resolves from the public repository with an empty local
+   Maven repository. Do not rely on a locally installed snapshot parent.
+3. For Kit, choose the tested Knowledge runner explicitly using
+   `knowledge.mcp.group-id` and `knowledge.mcp.version` in `distribution.properties`.
+   Version 0.0.2 remains under `io.github.luigidemasi`; migrated Knowledge builds use
+   `org.apache.camel`. Verify the exact runner before changing these pins.
+   Synchronize distribution mirrors with `python3 tools/sync_distribution_mirrors.py`
+   and launcher fallback versions with
+   `./mvnw -B -f kit/pom.xml -N antrun:run@sync-jbang-launcher-versions`.
+4. Update the product README/changelog and shared Antora docs. Run
+   `./mvnw -B -Psourcecheck validate`, then
+   `./mvnw -B -Plinux-ship-certification -Deval.requireVectors=true clean install`
+   on Linux. The Knowledge quality gate must have a working vector leg.
+5. Validate the selected target, for example
+   `python3 tools/release_target.py kit --tag camel-kit-X.Y.Z`.
+   Review and sign the source commit and tag; record its full SHA.
+6. Dispatch **Stage Maven Release** with the target, exact tag, and expected SHA.
+   It tests and signs only the selected reactor and uploads a validated Central
+   staging deployment. `autoPublish` is disabled. No product release command should
+   deploy the entire root reactor.
+7. Prepare the source release candidate, signatures, checksums, verification and PMC
+   vote following the [Camel release guide](https://camel.apache.org/manual/release-guide.html)
+   and [ASF release policy](https://www.apache.org/legal/release-policy.html).
+   The staging workflow is an artifact-building aid, not a complete ASF release
+   process. Promote artifacts and publish release announcements only after approval.
+8. Advance only the released target to its next snapshot and restore its SCM tag to
+   `HEAD`. For Kit, synchronize launcher fallback versions again. Verify clean-cache
+   installation of the released CLI/plugin or standalone Knowledge runner.
 
-4. Review the diff, commit with `git commit -S`, and tag that exact commit as `camel-kit-0.4.1`.
-   Record its full SHA. Keep the generated release artifacts for inspection.
-5. Advance every reactor POM to `0.4.2-SNAPSHOT` and restore the root SCM tag to `HEAD`.
-   Run the launcher synchronization goal again; keep Knowledge pinned to its fixed release.
-   Validate the development build, sign the next-development commit, and open a PR.
-   Merge the reviewed PR and push the prepared tag before dispatching publication.
-   The release workflow is manual: pushing a branch or tag does not publish artifacts.
+The nightly snapshot workflow builds the root reactor. Manual snapshot dispatch can
+select just the parent, Kit, or Knowledge. Independent product builds require their
+chosen shared parent to be available locally or in the configured Maven repository.
 
-## Publish the prepared tag
+## Publish index data
 
-The repository needs these GitHub Actions secrets:
+Index production is maintainer-triggered and independent of server releases.
 
-- `MVN_CENTRAL_USER` and `MVN_CENTRAL_PASSWORD`: Central Portal token credentials.
-- `GPG_ID`: artifact-signing key ID.
-- `GPG_KEY`: base64-encoded private signing key, using the existing empty-passphrase convention.
+1. On a branch, run
+   `./mvnw -B -pl knowledge/index -am -Prebuild-index install`.
+   This updates the committed index and manifest skeleton; a normal build never
+   regenerates the corpus.
+2. Inspect the generated changes, run
+   `./mvnw -B -pl knowledge/mcp -am -Deval.requireVectors=true test`, and submit the
+   signed index update for review.
+3. After merge, dispatch **Index Release** from `main` with the reviewed full SHA.
+   It packages the unchanged, tested index with a SHA-256 manifest under a unique
+   `knowledge-index-v1-...` tag. It does not mark data as the repository's latest
+   product release and does not overwrite previous assets.
 
-Run **Publish Maven Release** (`release.yml`) from `main`, with the prepared tag and its
-full reviewed commit SHA in `expected_sha`. It checks the tag and all reactor versions,
-then runs the full build, signs artifacts and waits for Central publication. It does
-not create commits, move tags, merge branches, or create a GitHub release.
+The v1 contract is Lucene 9, `granite-embedding-small-english-r2-q8`, 384 dimensions,
+and manifest `formatVersion: 1`. A breaking format/model change needs a new
+compatibility channel and a compatible server release. See the
+[Knowledge README](../knowledge/README.md#index-distribution) for discovery, pinning,
+cache fallback and legacy manifest overrides.
 
-Publish Knowledge MCP `0.0.2` and its refreshed index first. Verify that the pinned
-`runner` artifact is available before publishing Camel Kit.
-After publication, verify the tag-pinned JBang install and Camel JBang plugin from a clean cache.
-Create the GitHub release with reviewed changelog notes, `--verify-tag` and `--latest`.
-The unqualified JBang alias continues to follow the development branch.
+## Migration and Git history
+
+Knowledge was imported as a subtree merge without rewriting its original commits.
+The subsequent layout and namespace changes are separate from that import. Preserve
+the merge ancestry when landing this migration: squash merging or rebasing the
+import would discard the original commit identities. Historical Knowledge tags
+retain their original names and targets; transfer them only after checking for
+collisions. Existing release assets remain at their original repository URLs.
+
+The migration changes Java packages to `org.apache.camel.kit` and Knowledge Maven
+coordinates to `org.apache.camel`. Java consumers must update imports and Maven
+dependencies; MCP clients continue to use the same protocol and tool names. Keep
+legacy artifacts and download locations available for existing installations. New
+index discovery becomes usable once the first compatible index release is published
+in `apache/camel-kit`; until then, use an explicit legacy manifest URL or local index.

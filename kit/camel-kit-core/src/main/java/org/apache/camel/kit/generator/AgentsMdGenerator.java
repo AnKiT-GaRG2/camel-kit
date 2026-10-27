@@ -1,0 +1,21 @@
+package org.apache.camel.kit.generator;
+
+import java.nio.file.Files;
+import java.util.Map;
+
+import org.apache.camel.kit.util.AnsiColors;
+
+class AgentsMdGenerator {
+
+    private final QuteTemplateEngine qute = new QuteTemplateEngine();
+
+    void generate(InitContext ctx) throws Exception {
+        Map<String, Object> data = new java.util.HashMap<>(
+                Map.of(
+                        "COMMAND_PREFIX", ctx.commandPrefix(),
+                        "BOB2", "bob2".equals(ctx.agentName())));
+        String content = qute.render("templates/shared/agents-md.md", data);
+        Files.writeString(ctx.projectDir().resolve("AGENTS.md"), content);
+        ctx.printer().println(AnsiColors.green("✓") + " Generated AGENTS.md with skill routing and iron laws");
+    }
+}
