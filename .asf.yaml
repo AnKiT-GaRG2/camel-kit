@@ -27,7 +27,7 @@ github:
     - yaml
     - mcp
   enabled_merge_buttons:
-    merge: false
+    merge: true
     rebase: true
     squash: true
   features:
