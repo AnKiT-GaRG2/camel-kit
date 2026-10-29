@@ -187,6 +187,23 @@ class DefaultGeneratorTest {
     }
 
     @Test
+    void agentsMdNamesContextAuthorityByAPathFromTheProjectRoot() throws Exception {
+        java.util.regex.Pattern named = java.util.regex.Pattern.compile("`([^`\\s]*shared/context-authority\\.md)`");
+        for (String agentName : AgentRegistry.names()) {
+            Path projectDir = tempDir.resolve("context-authority-" + agentName);
+            InitContext ctx = createContext(agentName, projectDir, "camel-kit");
+            AgentGeneratorFactory.create(agentName).generate(ctx);
+
+            String content = Files.readString(ctx.projectDir().resolve("AGENTS.md"));
+            java.util.regex.Matcher m = named.matcher(content);
+            while (m.find()) {
+                assertTrue(Files.exists(ctx.projectDir().resolve(m.group(1))),
+                        agentName + ": AGENTS.md names " + m.group(1) + ", which does not exist from the project root");
+            }
+        }
+    }
+
+    @Test
     void yamlDslRuleSemanticsInGeneratedOutput() throws Exception {
         for (String agentName : AgentRegistry.names()) {
             Path projectDir = tempDir.resolve("yaml-rules-" + agentName);
